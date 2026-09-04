@@ -22,6 +22,9 @@ draft, configuration injection model, risks, and proposed acceptance criteria.
 See [docs/PRD.md](docs/PRD.md) for the product requirements, user stories,
 feature priorities, workflows, and MVP acceptance criteria.
 
+See [docs/PROTOTYPE-SPEC.md](docs/PROTOTYPE-SPEC.md) for the functional
+prototype screens, elements, states, interactions, and clickable flows.
+
 ## Project status
 
 Design draft. No implementation contract has been accepted yet.
