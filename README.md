@@ -19,6 +19,9 @@ Pi or modify a user's project `.pi` directory by default.
 See [docs/PRODUCT-DESIGN.md](docs/PRODUCT-DESIGN.md) for the current design
 draft, configuration injection model, risks, and proposed acceptance criteria.
 
+See [docs/PRD.md](docs/PRD.md) for the product requirements, user stories,
+feature priorities, workflows, and MVP acceptance criteria.
+
 ## Project status
 
 Design draft. No implementation contract has been accepted yet.
