@@ -11,6 +11,40 @@ function piThinkingMap(provider, model) {
   return model.thinkingLevelMap || {};
 }
 
+function resolveModelReference(providers, ref) {
+  const normalizedRef = String(ref || "").trim();
+  if (!normalizedRef) return null;
+  const separatorIndex = normalizedRef.indexOf("/");
+  if (separatorIndex <= 0 || separatorIndex >= normalizedRef.length - 1) return null;
+  const providerId = normalizedRef.slice(0, separatorIndex);
+  const modelId = normalizedRef.slice(separatorIndex + 1);
+  const provider = providers.find((item) => item.id === providerId);
+  const model = provider?.models.find((item) => item.id === modelId);
+  if (!provider || !model) return null;
+  return { provider, model };
+}
+
+function buildEnabledModels(state) {
+  const cycleRefs = Array.isArray(state.cycle?.modelRefs) ? state.cycle.modelRefs : [];
+  const enabledModels = [];
+  const seen = new Set();
+  const missing = [];
+
+  for (const rawRef of cycleRefs) {
+    const ref = String(rawRef || "").trim();
+    if (!ref || seen.has(ref)) continue;
+    seen.add(ref);
+    if (!resolveModelReference(state.providers || [], ref)) missing.push(ref);
+    else enabledModels.push(ref);
+  }
+
+  if (missing.length > 0) {
+    throw new Error(`循环列表包含不存在的模型: ${missing.join(" / ")}`);
+  }
+
+  return enabledModels;
+}
+
 function toPiModel(provider, model) {
   return {
     id: model.id,
@@ -73,12 +107,12 @@ export function writePiProfile({ dataDir, state, piExecutable = "pi" }) {
     ? {
         defaultProvider: provider.piProvider || provider.id,
         defaultModel: model.id,
-        enabledModels: [`${provider.piProvider || provider.id}/*`]
+        enabledModels: buildEnabledModels(state)
       }
     : {
         defaultProvider: "pi-manager",
         defaultModel: model.id,
-        enabledModels: ["pi-manager/*"]
+        enabledModels: buildEnabledModels(state)
       };
   writeJsonAtomic(settingsPath, settings);
 
@@ -143,6 +177,7 @@ export function writePiProfile({ dataDir, state, piExecutable = "pi" }) {
     modelId: model.id,
     thinking: state.active.thinking,
     thinkingValue: getThinkingLevelValue(model, state.active.thinking),
+    cycleModelRefs: buildEnabledModels(state),
     mode: native ? "native-subscription" : "manager-gateway"
   });
 

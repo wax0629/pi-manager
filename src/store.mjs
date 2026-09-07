@@ -52,6 +52,19 @@ function normalizeModel(item) {
   };
 }
 
+function normalizeCycleModelRefs(value) {
+  if (!Array.isArray(value)) return [];
+  const refs = [];
+  const seen = new Set();
+  for (const item of value) {
+    const ref = String(item || "").trim();
+    if (!ref || seen.has(ref)) continue;
+    seen.add(ref);
+    refs.push(ref);
+  }
+  return refs;
+}
+
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 }
@@ -94,6 +107,13 @@ function normalizeState(defaultState, savedState) {
     ...defaultState,
     ...savedState,
     active: { ...defaultState.active, ...(savedState.active || {}) },
+    cycle: Object.prototype.hasOwnProperty.call(savedState, "cycle")
+      ? {
+          modelRefs: Array.isArray(savedState.cycle?.modelRefs)
+            ? normalizeCycleModelRefs(savedState.cycle.modelRefs)
+            : [...defaultState.cycle.modelRefs]
+        }
+      : { ...defaultState.cycle },
     gateway: { ...defaultState.gateway, ...(savedState.gateway || {}) },
     providers,
     runtime: { ...defaultState.runtime, ...(savedState.runtime || {}) }
@@ -210,6 +230,13 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
       store.touchConfiguration();
       store.recordEvent("model", `已更新 ${provider.name} / ${model.name} Thinking 映射`, source);
       return model;
+    },
+    updateCycleList(modelRefs) {
+      const nextRefs = normalizeCycleModelRefs(modelRefs);
+      state.cycle.modelRefs = nextRefs;
+      store.touchConfiguration();
+      store.recordEvent("model", "已更新循环列表", nextRefs.join(" / "));
+      return nextRefs;
     },
     addProvider({ id: requestedId, name, kind = "openai-api", baseUrl, models = [], credentialEnv = "", apiKey = "" }) {
       const normalizedName = String(name || "").trim();

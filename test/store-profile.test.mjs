@@ -83,7 +83,11 @@ test("profile generation writes an isolated custom provider extension without th
   const launcher = fs.readFileSync(profile.launcherPath, "utf8");
 
   assert.equal(settings.defaultProvider, "pi-manager");
-  assert.deepEqual(settings.enabledModels, ["pi-manager/*"]);
+  assert.deepEqual(settings.enabledModels, [
+    "qiniu/gpt-5.6-luna",
+    "openai-codex/gpt-5.6-luna",
+    "qiniu/gpt-5.6-sol"
+  ]);
   assert.equal(extension.includes("test-secret-value"), false);
   assert.equal(extension.includes("https://relay.example.test"), false);
   assert.equal(extension.includes("http://127.0.0.1:8675/v1"), true);
@@ -160,6 +164,43 @@ test("candidate route changes remain unapplied until profile application", (t) =
   assert.notDeepEqual(store.get().active, before.active);
   assert.equal(store.get().runtime.configRevision > before.runtime.configRevision, true);
   assert.equal(store.get().runtime.appliedRevision, before.runtime.appliedRevision);
+});
+
+test("cycle list updates persist and write enabledModels in order", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+
+  store.updateCycleList([
+    "qiniu/grok-4.6",
+    "openai-codex/gpt-5.6-luna",
+    "qiniu/gpt-5.6-luna"
+  ]);
+
+  const reloaded = createStore(fixture);
+  assert.deepEqual(reloaded.get().cycle.modelRefs, [
+    "qiniu/grok-4.6",
+    "openai-codex/gpt-5.6-luna",
+    "qiniu/gpt-5.6-luna"
+  ]);
+
+  const profile = writePiProfile({ dataDir: fixture.dataDir, state: reloaded.get(), piExecutable: "/usr/bin/pi" });
+  const settings = JSON.parse(fs.readFileSync(profile.settingsPath, "utf8"));
+  assert.deepEqual(settings.enabledModels, [
+    "qiniu/grok-4.6",
+    "openai-codex/gpt-5.6-luna",
+    "qiniu/gpt-5.6-luna"
+  ]);
+});
+
+test("profile generation rejects missing cycle references", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  store.updateCycleList(["missing-provider/missing-model"]);
+
+  assert.throws(
+    () => writePiProfile({ dataDir: fixture.dataDir, state: store.get(), piExecutable: "/usr/bin/pi" }),
+    /不存在的模型/
+  );
 });
 
 test("profile writes the saved thinking map without silently downgrading levels", (t) => {

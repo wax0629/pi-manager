@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   Activity,
+  ArrowDown,
+  ArrowUp,
   Boxes,
   CheckCircle2,
   CircleAlert,
@@ -25,11 +27,13 @@ import {
   createProvider,
   deleteProvider,
   getState,
+  updateCycleList,
   routeProvider,
   updateModelThinking,
 } from './api';
 import type {
   CreateProviderInput,
+  CycleListEntry,
   ManagerState,
   ModelDefinition,
   ProviderState,
@@ -88,6 +92,44 @@ function serializeThinkingMap(map: ThinkingLevelMap) {
     if (hasThinkingMapValue(map, level)) ordered[level] = map[level];
   }
   return JSON.stringify(ordered);
+}
+
+function splitModelRef(ref: string) {
+  const value = String(ref || '').trim();
+  const slash = value.indexOf('/');
+  if (slash <= 0 || slash >= value.length - 1) return { providerId: '', modelId: '' };
+  return { providerId: value.slice(0, slash), modelId: value.slice(slash + 1) };
+}
+
+function serializeModelRefs(modelRefs: string[]) {
+  return JSON.stringify(modelRefs);
+}
+
+function resolveCycleEntry(ref: string, providers: ProviderState[]): CycleListEntry {
+  const normalizedRef = String(ref || '').trim();
+  const { providerId, modelId } = splitModelRef(normalizedRef);
+  const provider = providers.find((item) => item.id === providerId);
+  const model = provider?.models.find((item) => item.id === modelId);
+  const valid = Boolean(provider && model && provider.status === 'ready');
+  return {
+    index: 0,
+    ref: normalizedRef,
+    providerId,
+    providerName: provider?.name || providerId,
+    providerStatus: provider?.status || 'missing',
+    modelId,
+    modelName: model?.name || modelId,
+    valid,
+    reason: !provider ? 'provider-missing' : !model ? 'model-missing' : provider.status !== 'ready' ? 'provider-unready' : 'ok',
+  };
+}
+
+function resolveCycleEntries(modelRefs: string[], providers: ProviderState[]) {
+  return modelRefs.map((ref, index) => ({ ...resolveCycleEntry(ref, providers), index }));
+}
+
+function cycleEntryLabel(entry: CycleListEntry) {
+  return entry.providerId && entry.modelId ? `${entry.providerId}/${entry.modelId}` : entry.ref || '无效引用';
 }
 
 function Sidebar({ activeNav, onNavigate, piInstalled }: { activeNav: NavId; onNavigate: (nav: NavId) => void; piInstalled: boolean }) {
@@ -671,11 +713,7 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
       )}
 
       {activeTab === 'cycle' && (
-        <div className="rounded-xl border border-dashed border-surface-300 bg-white/60 p-8 text-center dark:border-surface-800 dark:bg-[#0a0a0a]/60">
-          <RefreshCw size={22} className="mx-auto mb-3 text-surface-400" />
-          <h2 className="text-[14px] font-medium text-surface-900 dark:text-white">循环列表接口待接入</h2>
-          <p className="mx-auto mt-1 max-w-sm text-[13px] leading-5 text-surface-500">当前版本已读取真实模型目录，下一切片将把排序结果写入 Pi 的 enabledModels。</p>
-        </div>
+        <CycleListEditor key={serializeModelRefs(state.cycle.modelRefs)} state={state} onStateChanged={onStateChanged} />
       )}
 
       {activeTab === 'default' && (
@@ -852,6 +890,156 @@ function ThinkingMappingEditor({
         <button type="button" onClick={() => void saveThinkingMap()} disabled={!mappingChanged || savingMapping} className="inline-flex h-8 shrink-0 items-center rounded-md bg-primary-600 px-3 text-[12px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">{savingMapping ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Save size={13} className="mr-1.5" />}保存为候选配置</button>
       </div>
       {mappingError && <div className="mx-5 mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{mappingError}</div>}
+    </div>
+  );
+}
+
+function CycleListEditor({
+  state,
+  onStateChanged,
+}: {
+  state: ManagerState;
+  onStateChanged: (nextState: ManagerState, notice: string) => void;
+}) {
+  const [draftRefs, setDraftRefs] = useState<string[]>(() => [...state.cycle.modelRefs]);
+  const [query, setQuery] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const draftEntries = useMemo(() => resolveCycleEntries(draftRefs, state.providers), [draftRefs, state.providers]);
+  const draftSet = useMemo(() => new Set(draftRefs), [draftRefs]);
+  const availableModels = useMemo(() => (
+    state.providers.flatMap((provider) => provider.models.map((model) => ({
+      ref: `${provider.id}/${model.id}`,
+      provider,
+      model,
+    })))
+  ).filter(({ provider, model, ref }) => {
+    const value = `${provider.id}/${model.id} ${provider.name} ${model.name}`.toLowerCase();
+    return provider.status === 'ready' && (!query.trim() || value.includes(query.trim().toLowerCase())) && !draftSet.has(ref);
+  }), [draftSet, query, state.providers]);
+  const changed = serializeModelRefs(draftRefs) !== serializeModelRefs(state.cycle.modelRefs);
+  const invalidEntries = draftEntries.filter((entry) => !entry.valid);
+
+  const addModel = (ref: string) => {
+    setDraftRefs((current) => (current.includes(ref) ? current : [...current, ref]));
+    setError('');
+  };
+
+  const removeModel = (index: number) => {
+    setDraftRefs((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    setError('');
+  };
+
+  const moveModel = (index: number, delta: number) => {
+    setDraftRefs((current) => {
+      const nextIndex = index + delta;
+      if (nextIndex < 0 || nextIndex >= current.length) return current;
+      const next = [...current];
+      const [item] = next.splice(index, 1);
+      next.splice(nextIndex, 0, item);
+      return next;
+    });
+    setError('');
+  };
+
+  const saveCycleList = async () => {
+    if (draftRefs.length === 0 && !window.confirm('循环列表为空时，Pi 会回到自己的默认行为。仍然要保存吗？')) {
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const response = await updateCycleList({ modelRefs: draftRefs });
+      onStateChanged(response.state, '循环列表已保存为候选配置');
+    } catch (caughtError) {
+      setError(caughtError instanceof ApiError ? caughtError.message : '保存循环列表失败。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)]">
+      <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
+        <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">已加入循环</h2>
+              <p className="mt-1 text-[12px] text-surface-500">顺序就是写入顺序。空列表会让 Pi 回到默认行为。</p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-[11px]">
+              <span className="rounded-full bg-surface-100 px-2.5 py-1 text-surface-600 dark:bg-surface-800 dark:text-surface-300">{draftRefs.length} 项</span>
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">{draftEntries.filter((entry) => entry.valid).length} 可用</span>
+              {invalidEntries.length > 0 && <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">{invalidEntries.length} 失效</span>}
+            </div>
+          </div>
+        </div>
+        <div className="divide-y divide-surface-100 dark:divide-surface-800/50">
+          {draftEntries.length > 0 ? draftEntries.map((entry, index) => (
+            <div key={`${entry.ref}-${index}`} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-surface-100 text-[11px] font-medium text-surface-600 dark:bg-surface-800 dark:text-surface-300">{index + 1}</span>
+                  <span className="font-mono text-[12px] font-medium text-surface-900 dark:text-white">{cycleEntryLabel(entry)}</span>
+                  {entry.valid ? (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">可用</span>
+                  ) : (
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">失效 · {entry.reason}</span>
+                  )}
+                </div>
+                <div className="mt-1 text-[12px] text-surface-500">
+                  {entry.providerName} · {entry.modelName}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button type="button" onClick={() => moveModel(index, -1)} disabled={index === 0} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-surface-200 text-surface-500 hover:bg-surface-50 hover:text-surface-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white" aria-label="上移"><ArrowUp size={14} /></button>
+                <button type="button" onClick={() => moveModel(index, 1)} disabled={index === draftEntries.length - 1} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-surface-200 text-surface-500 hover:bg-surface-50 hover:text-surface-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white" aria-label="下移"><ArrowDown size={14} /></button>
+                <button type="button" onClick={() => removeModel(index)} className="inline-flex h-8 items-center rounded-md border border-surface-200 px-3 text-[12px] font-medium text-surface-500 hover:bg-surface-50 hover:text-surface-900 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white"><Trash2 size={13} className="mr-1.5" />移除</button>
+              </div>
+            </div>
+          )) : (
+            <div className="px-5 py-10 text-center text-[13px] text-surface-500">
+              当前没有任何循环项。保存后 Pi 会使用默认行为。
+            </div>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-surface-100 bg-surface-50/50 px-5 py-4 dark:border-surface-800 dark:bg-surface-900/20">
+          <div className="text-[12px] text-surface-500">
+            {invalidEntries.length > 0 ? `有 ${invalidEntries.length} 个失效引用，应用时会被拦住。` : '所有引用当前都可用。'}
+          </div>
+          <button type="button" onClick={() => void saveCycleList()} disabled={!changed || saving} className="inline-flex h-8 items-center rounded-md bg-primary-600 px-3 text-[12px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">{saving ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Save size={13} className="mr-1.5" />}保存为候选配置</button>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
+        <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
+          <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">可加入模型</h2>
+          <p className="mt-1 text-[12px] text-surface-500">从完整目录里挑选已就绪模型，加入后会追加到列表末尾。</p>
+        </div>
+        <div className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">
+          <div className="relative">
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索 provider 或模型" className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+          </div>
+        </div>
+        <div className="max-h-[520px] divide-y divide-surface-100 overflow-y-auto dark:divide-surface-800/50">
+          {availableModels.length > 0 ? availableModels.map(({ ref, provider, model }) => (
+            <div key={ref} className="flex items-center justify-between gap-3 px-5 py-4">
+              <div className="min-w-0">
+                <div className="font-mono text-[12px] font-medium text-surface-900 dark:text-white">{ref}</div>
+                <div className="mt-1 text-[12px] text-surface-500">{provider.name} · {model.name} · {statusMeta(provider.status).label}</div>
+              </div>
+              <button type="button" onClick={() => addModel(ref)} className="inline-flex h-8 items-center rounded-md border border-surface-200 px-3 text-[12px] font-medium text-surface-600 hover:bg-surface-50 hover:text-surface-900 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-800 dark:hover:text-white"><Plus size={13} className="mr-1.5" />加入</button>
+            </div>
+          )) : (
+            <div className="px-5 py-10 text-center text-[13px] text-surface-500">
+              没有匹配的可加入模型。
+            </div>
+          )}
+        </div>
+        {error && <div className="mx-5 mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
+      </div>
     </div>
   );
 }
