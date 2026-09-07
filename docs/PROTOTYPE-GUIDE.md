@@ -25,8 +25,8 @@ npm run dev
 ### 步骤一：触发草稿状态 (Dirty State)
 1. 默认进入 **供应商与账号** 页面。
 2. 页面先从 `GET /api/state` 读取真实的 provider、模型和当前路由。
-3. 供应商卡片只用于查看接入状态、刷新和删除，不负责选择实际使用的模型。
-4. **观察点**：顶部只读显示当前 provider/model；配置 revision 与已应用 revision 不一致时，`部署变更` 才会启用。
+3. 供应商卡片只用于查看接入状态、测试连接、刷新和删除，不负责选择实际使用的模型。
+4. **观察点**：顶部只读显示当前 provider/model；连接测试结果会在卡片内显示为分类状态；配置 revision 与已应用 revision 不一致时，`部署变更` 才会启用。
 
 ### 步骤二：通过向导新增供应商 (Wizard)
 1. 点击页面右上角的 `新增供应商` 按钮。
@@ -49,11 +49,12 @@ npm run dev
 
 ## 4. 后续开发建议
 
-当前页面已经通过 `web/src/api.ts` 接入本地 Manager API，默认模型路由、循环列表、thinking 映射和 Profile 应用/回滚都已可操作；停止 Pi 和更完整的进程生命周期仍在后续切片中。
+当前页面已经通过 `web/src/api.ts` 接入本地 Manager API，默认模型路由、循环列表、thinking 映射、provider 连接测试和 Profile 应用/回滚都已可操作；停止 Pi 和更完整的进程生命周期仍在后续切片中。
 
 1. **状态管理**：由于有“未保存更改”的机制存在，建议引入 `Zustand` 或 `Redux` 作为单一事实来源 (Single Source of Truth)，来管理底层实际配置与前端草稿配置之间的 Diff 比对。
 2. **API 设计**：继续扩展已有业务接口：
    - `GET /api/state`：读取 Manager 持久化状态和运行摘要。
    - `POST /api/providers`：保存 provider 元数据和凭据引用。
+   - `POST /api/providers/:id/test`：执行单次连接测试并返回分类结果。
    - `POST /api/apply`：生成隔离 profile；后续再接入完整 diff、验证和回滚。
 3. **轮询机制**：可以为每个卡片状态增加 SSE (Server-Sent Events) 或 WebSocket 推送，当真正的后台守护进程（Pi Engine）掉线或状态变更时，实时反馈到 UI 的徽章上。

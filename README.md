@@ -21,6 +21,8 @@ Thinking-map editing and cycling-list editing are now part of the current
 slice. Profile application, launch and rollback are now part of the current
 slice too. The remaining Pi lifecycle work is richer process ownership and
 diagnostics.
+Provider connection testing with classified failures is now part of the
+current slice too.
 
 Pi Manager is intended to work with the official Pi package. It does not fork
 Pi or modify a user's project `.pi` directory by default.
