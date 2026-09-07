@@ -1,0 +1,77 @@
+import type {
+  CreateProviderInput,
+  CreateProviderResponse,
+  ManagerState,
+  StateResponse,
+} from './types';
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+async function request<T>(pathname: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(pathname, {
+    ...init,
+    headers: {
+      ...(init?.body ? { 'content-type': 'application/json' } : {}),
+      ...init?.headers,
+    },
+  });
+
+  let payload: unknown = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    const message = typeof payload === 'object' && payload !== null && 'error' in payload
+      ? String(payload.error)
+      : `请求失败（${response.status}）`;
+    throw new ApiError(message, response.status);
+  }
+
+  return payload as T;
+}
+
+export async function getState(): Promise<ManagerState> {
+  const payload = await request<ManagerState>('/api/state');
+  return payload;
+}
+
+export async function createProvider(input: CreateProviderInput): Promise<CreateProviderResponse> {
+  return request<CreateProviderResponse>('/api/providers', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteProvider(providerId: string): Promise<StateResponse> {
+  return request<StateResponse>(`/api/providers/${encodeURIComponent(providerId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function routeProvider(input: {
+  providerId: string;
+  modelId: string;
+  thinking: string;
+}): Promise<{ ok: true; state: ManagerState }> {
+  return request<{ ok: true; state: ManagerState }>('/api/route', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function applyProfile(): Promise<{ ok: true; state: ManagerState }> {
+  return request<{ ok: true; state: ManagerState }>('/api/apply', {
+    method: 'POST',
+  });
+}
