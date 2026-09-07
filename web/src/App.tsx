@@ -8,8 +8,10 @@ import {
   KeyRound,
   LayoutDashboard,
   Loader2,
+  Pencil,
   Plus,
   RefreshCw,
+  Save,
   Search,
   Server,
   Settings2,
@@ -24,12 +26,16 @@ import {
   deleteProvider,
   getState,
   routeProvider,
+  updateModelThinking,
 } from './api';
 import type {
   CreateProviderInput,
   ManagerState,
   ModelDefinition,
   ProviderState,
+  ThinkingLevel,
+  ThinkingLevelMap,
+  ThinkingMapSource,
 } from './types';
 
 type NavId = 'providers' | 'models' | 'profiles' | 'diagnostics';
@@ -51,13 +57,37 @@ function statusMeta(status: ProviderState['status']) {
   return { label: '未配置', className: 'text-surface-500 dark:text-surface-400', dot: 'bg-surface-300 dark:bg-surface-600' };
 }
 
-function thinkingSummary(model: ModelDefinition) {
-  if (!model.reasoning) return '关闭';
-  return model.thinkingLevels.filter((level) => level !== 'off').join(' / ') || '未验证';
+const PI_THINKING_LEVELS: ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+const THINKING_MAP_SOURCE_LABELS: Record<ThinkingMapSource, string> = {
+  'provider-default': 'Provider 默认',
+  'provider-docs': '供应商文档',
+  'request-probe': '请求探测',
+  user: '用户手工',
+};
+
+function hasThinkingMapValue(map: ThinkingLevelMap, level: ThinkingLevel) {
+  return Object.prototype.hasOwnProperty.call(map, level);
 }
 
-function supportedThinkingLevels(model: ModelDefinition) {
-  return model.reasoning ? model.thinkingLevels : ['off'];
+function supportedThinkingLevels(model: ModelDefinition): ThinkingLevel[] {
+  if (!model.reasoning) return ['off'];
+  return PI_THINKING_LEVELS.filter((level) => {
+    if (hasThinkingMapValue(model.thinkingLevelMap, level)) return model.thinkingLevelMap[level] !== null;
+    return level !== 'xhigh' && level !== 'max';
+  });
+}
+
+function thinkingSummary(model: ModelDefinition) {
+  if (!model.reasoning) return '关闭';
+  return supportedThinkingLevels(model).filter((level) => level !== 'off').join(' / ') || '未验证';
+}
+
+function serializeThinkingMap(map: ThinkingLevelMap) {
+  const ordered: ThinkingLevelMap = {};
+  for (const level of PI_THINKING_LEVELS) {
+    if (hasThinkingMapValue(map, level)) ordered[level] = map[level];
+  }
+  return JSON.stringify(ordered);
 }
 
 function Sidebar({ activeNav, onNavigate, piInstalled }: { activeNav: NavId; onNavigate: (nav: NavId) => void; piInstalled: boolean }) {
@@ -507,14 +537,17 @@ function DeployModal({ state, isOpen, onClose, onApplied }: { state: ManagerStat
   );
 }
 
-function ModelsPage({ state, onRouteSaved }: { state: ManagerState; onRouteSaved: (nextState: ManagerState) => void }) {
-  const [activeTab, setActiveTab] = useState<'catalog' | 'cycle' | 'default'>('catalog');
+type ModelsTab = 'catalog' | 'cycle' | 'default' | 'thinking';
+
+function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateChanged: (nextState: ManagerState, notice: string) => void }) {
+  const [activeTab, setActiveTab] = useState<ModelsTab>('catalog');
   const [query, setQuery] = useState('');
   const [selectedProviderId, setSelectedProviderId] = useState(state.active.providerId);
   const [selectedModelId, setSelectedModelId] = useState(state.active.modelId);
-  const [selectedThinking, setSelectedThinking] = useState(state.active.thinking);
+  const [selectedThinking, setSelectedThinking] = useState<ThinkingLevel>(state.active.thinking as ThinkingLevel);
   const [savingRoute, setSavingRoute] = useState(false);
   const [routeError, setRouteError] = useState('');
+  const [mappingRef, setMappingRef] = useState(`${state.active.providerId}/${state.active.modelId}`);
   const models = useMemo(() => state.providers.flatMap((provider) => provider.models.map((model) => ({ provider, model }))), [state.providers]);
   const visibleModels = models.filter(({ provider, model }) => {
     const value = `${provider.id}/${model.id} ${model.name}`.toLowerCase();
@@ -528,6 +561,17 @@ function ModelsPage({ state, onRouteSaved }: { state: ManagerState; onRouteSaved
   const routeChanged = selectedProviderId !== state.active.providerId
     || selectedModelId !== state.active.modelId
     || selectedThinking !== state.active.thinking;
+  const effectiveMappingRef = models.some(({ provider, model }) => `${provider.id}/${model.id}` === mappingRef)
+    ? mappingRef
+    : models[0]
+      ? `${models[0].provider.id}/${models[0].model.id}`
+      : '';
+  const mappingEntry = models.find(({ provider, model }) => `${provider.id}/${model.id}` === effectiveMappingRef) || models[0];
+  const mappingProvider = mappingEntry?.provider;
+  const mappingModel = mappingEntry?.model;
+  const mappingEditorKey = mappingModel
+    ? `${effectiveMappingRef}:${serializeThinkingMap(mappingModel.thinkingLevelMap)}:${mappingModel.thinkingMapSource}:${mappingModel.thinkingMapVerified}`
+    : effectiveMappingRef;
 
   const handleProviderChange = (providerId: string) => {
     const provider = state.providers.find((item) => item.id === providerId);
@@ -535,7 +579,7 @@ function ModelsPage({ state, onRouteSaved }: { state: ManagerState; onRouteSaved
     const levels = model ? supportedThinkingLevels(model) : [];
     setSelectedProviderId(providerId);
     setSelectedModelId(model?.id || '');
-    setSelectedThinking(levels.includes(state.active.thinking) ? state.active.thinking : levels.at(-1) || 'off');
+    setSelectedThinking((levels.includes(state.active.thinking as ThinkingLevel) ? state.active.thinking : levels.at(-1) || 'off') as ThinkingLevel);
     setRouteError('');
   };
 
@@ -543,7 +587,7 @@ function ModelsPage({ state, onRouteSaved }: { state: ManagerState; onRouteSaved
     const model = selectedProvider?.models.find((item) => item.id === modelId);
     const levels = model ? supportedThinkingLevels(model) : [];
     setSelectedModelId(modelId);
-    setSelectedThinking(levels.includes(selectedThinking) ? selectedThinking : levels.at(-1) || 'off');
+    setSelectedThinking((levels.includes(selectedThinking) ? selectedThinking : levels.at(-1) || 'off') as ThinkingLevel);
     setRouteError('');
   };
 
@@ -560,7 +604,7 @@ function ModelsPage({ state, onRouteSaved }: { state: ManagerState; onRouteSaved
         modelId: selectedModel.id,
         thinking: selectedThinking,
       });
-      onRouteSaved(response.state);
+      onStateChanged(response.state, '默认模型已保存为候选配置');
     } catch (caughtError) {
       setRouteError(caughtError instanceof ApiError ? caughtError.message : '保存默认模型失败。');
     } finally {
@@ -574,27 +618,28 @@ function ModelsPage({ state, onRouteSaved }: { state: ManagerState; onRouteSaved
         <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">模型资源库</h1>
         <p className="mt-1 text-[14px] text-surface-500">当前从 Manager 状态读取 {models.length} 个模型。</p>
       </div>
-      <div className="flex items-center gap-6 border-b border-surface-200 dark:border-surface-800">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-surface-200 dark:border-surface-800">
         {[
           ['catalog', '完整目录'],
           ['cycle', '循环列表'],
           ['default', '默认模型'],
+          ['thinking', 'Thinking 映射'],
         ].map(([value, label]) => (
-          <button key={value} type="button" onClick={() => setActiveTab(value as 'catalog' | 'cycle' | 'default')} className={`pb-2 text-[13px] font-medium ${activeTab === value ? 'border-b-2 border-surface-900 text-surface-900 dark:border-white dark:text-white' : 'text-surface-500 hover:text-surface-900 dark:hover:text-white'}`}>{label}</button>
+          <button key={value} type="button" onClick={() => setActiveTab(value as ModelsTab)} className={`pb-2 text-[13px] font-medium ${activeTab === value ? 'border-b-2 border-surface-900 text-surface-900 dark:border-white dark:text-white' : 'text-surface-500 hover:text-surface-900 dark:hover:text-white'}`}>{label}</button>
         ))}
       </div>
 
       {activeTab === 'catalog' && (
         <div className="overflow-hidden rounded-xl border border-surface-200 bg-white shadow-sm dark:border-surface-800 dark:bg-[#0a0a0a]">
-          <div className="flex items-center justify-between border-b border-surface-100 bg-surface-50/50 p-3 dark:border-surface-800 dark:bg-surface-900/20">
-            <div className="relative w-64">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-100 bg-surface-50/50 p-3 dark:border-surface-800 dark:bg-surface-900/20">
+            <div className="relative w-64 max-w-full">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
               <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索模型 ID" aria-label="搜索模型 ID" className="w-full rounded-md border border-surface-200 bg-white py-1.5 pl-8 pr-3 text-[13px] outline-none focus:border-surface-400 dark:border-surface-700 dark:bg-[#0a0a0a] dark:text-white" />
             </div>
-            <span className="text-[12px] text-surface-500">目录来源只读；使用策略在下方配置</span>
+            <span className="text-[12px] text-surface-500">目录来源只读；模型策略可单独调整</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-[13px]">
+            <table className="w-full min-w-[880px] text-left text-[13px]">
               <thead className="bg-surface-50/80 text-[12px] font-medium text-surface-500 dark:bg-surface-900/50 dark:text-surface-400">
                 <tr>
                   <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">模型</th>
@@ -603,6 +648,7 @@ function ModelsPage({ state, onRouteSaved }: { state: ManagerState; onRouteSaved
                   <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">Thinking</th>
                   <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">Context</th>
                   <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">状态</th>
+                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">策略</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-100 text-surface-700 dark:divide-surface-800/50 dark:text-surface-300">
@@ -614,8 +660,10 @@ function ModelsPage({ state, onRouteSaved }: { state: ManagerState; onRouteSaved
                     <td className="px-4 py-3 text-[12px] text-surface-500">{thinkingSummary(model)}</td>
                     <td className="px-4 py-3 font-mono text-[12px] text-surface-500">{Math.round(model.contextWindow / 1000)}K</td>
                     <td className="px-4 py-3">{provider.id === state.active.providerId && model.id === state.active.modelId ? <span className="text-primary-600 dark:text-primary-400">默认</span> : provider.status === 'ready' ? <span className="text-surface-400">可用</span> : <span className="text-amber-600 dark:text-amber-400">{statusMeta(provider.status).label}</span>}</td>
+                    <td className="px-4 py-3"><button type="button" onClick={() => { setMappingRef(`${provider.id}/${model.id}`); setActiveTab('thinking'); }} title={`编辑 ${model.name} 的 Thinking 映射`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium text-surface-600 transition-colors hover:bg-surface-100 hover:text-surface-950 dark:text-surface-400 dark:hover:bg-surface-800 dark:hover:text-white"><Pencil size={13} />映射</button></td>
                   </tr>
                 ))}
+                {visibleModels.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-[13px] text-surface-500">没有匹配的模型。</td></tr>}
               </tbody>
             </table>
           </div>
@@ -655,7 +703,7 @@ function ModelsPage({ state, onRouteSaved }: { state: ManagerState; onRouteSaved
             </label>
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Thinking</span>
-              <select value={selectedThinking} onChange={(event) => { setSelectedThinking(event.target.value); setRouteError(''); }} disabled={!selectedModel} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+              <select value={selectedThinking} onChange={(event) => { setSelectedThinking(event.target.value as ThinkingLevel); setRouteError(''); }} disabled={!selectedModel} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
                 {thinkingLevels.map((level) => <option key={level} value={level}>{level}</option>)}
               </select>
             </label>
@@ -680,6 +728,130 @@ function ModelsPage({ state, onRouteSaved }: { state: ManagerState; onRouteSaved
           {routeError && <div className="mt-4 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{routeError}</div>}
         </div>
       )}
+
+      {activeTab === 'thinking' && (
+        <div className="max-w-4xl space-y-4">
+          <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <label className="block min-w-[280px] flex-1 space-y-1.5">
+                <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">选择模型</span>
+                <select value={effectiveMappingRef} onChange={(event) => { setMappingRef(event.target.value); }} disabled={!mappingModel} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[12px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+                  {models.map(({ provider, model }) => <option key={`${provider.id}/${model.id}`} value={`${provider.id}/${model.id}`}>{provider.id}/{model.id}</option>)}
+                </select>
+              </label>
+              {mappingModel && <div className="text-right text-[12px] text-surface-500"><div>有效等级 <span className="font-mono text-surface-900 dark:text-white">{supportedThinkingLevels(mappingModel).length}/7</span></div><div className="mt-1">{mappingModel.thinkingMapVerified ? '已标记为已验证' : '尚未完成真实请求验证'}</div></div>}
+            </div>
+          </div>
+
+          {mappingModel ? (
+            <ThinkingMappingEditor key={mappingEditorKey} provider={mappingProvider} model={mappingModel} onStateChanged={onStateChanged} />
+          ) : <div className="rounded-xl border border-dashed border-surface-300 p-8 text-center text-[13px] text-surface-500 dark:border-surface-800">暂无可编辑的模型。</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ThinkingMappingEditor({
+  provider,
+  model,
+  onStateChanged,
+}: {
+  provider: ProviderState;
+  model: ModelDefinition;
+  onStateChanged: (nextState: ManagerState, notice: string) => void;
+}) {
+  const [mappingDraft, setMappingDraft] = useState<ThinkingLevelMap>({ ...model.thinkingLevelMap });
+  const [mappingSource, setMappingSource] = useState<ThinkingMapSource>(model.thinkingMapSource);
+  const [mappingVerified, setMappingVerified] = useState(model.thinkingMapVerified);
+  const [savingMapping, setSavingMapping] = useState(false);
+  const [mappingError, setMappingError] = useState('');
+
+  const mappingChanged = Boolean(
+    serializeThinkingMap(mappingDraft) !== serializeThinkingMap(model.thinkingLevelMap)
+    || mappingSource !== model.thinkingMapSource
+    || mappingVerified !== model.thinkingMapVerified
+  );
+
+  const mappingMode = (level: ThinkingLevel): 'default' | 'value' | 'unsupported' => {
+    if (!model.reasoning && level !== 'off') return 'unsupported';
+    if (!hasThinkingMapValue(mappingDraft, level)) return 'default';
+    return mappingDraft[level] === null ? 'unsupported' : 'value';
+  };
+
+  const changeMappingMode = (level: ThinkingLevel, mode: 'default' | 'value' | 'unsupported') => {
+    setMappingDraft((current) => {
+      const next = { ...current };
+      if (mode === 'default') delete next[level];
+      else if (mode === 'unsupported') next[level] = null;
+      else if (typeof next[level] !== 'string' || !next[level]) next[level] = level === 'off' ? 'none' : level;
+      return next;
+    });
+    setMappingError('');
+  };
+
+  const changeMappingValue = (level: ThinkingLevel, value: string) => {
+    setMappingDraft((current) => ({ ...current, [level]: value }));
+    setMappingError('');
+  };
+
+  const saveThinkingMap = async () => {
+    setSavingMapping(true);
+    setMappingError('');
+    try {
+      const response = await updateModelThinking({
+        providerId: provider.id,
+        modelId: model.id,
+        thinkingLevelMap: { ...mappingDraft },
+        source: mappingSource,
+        verified: mappingVerified,
+      });
+      onStateChanged(response.state, `${model.name} 的 Thinking 映射已保存为候选配置`);
+    } catch (caughtError) {
+      setMappingError(caughtError instanceof ApiError ? caughtError.message : '保存 Thinking 映射失败。');
+    } finally {
+      setSavingMapping(false);
+    }
+  };
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
+      <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">Pi 等级与上游值</h2><p className="mt-1 text-[12px] text-surface-500">缺省项遵循 Provider 默认；xhigh 和 max 缺省时不启用。</p></div>
+          <span className="rounded-md bg-surface-100 px-2 py-1 text-[11px] font-medium text-surface-600 dark:bg-surface-800 dark:text-surface-300">{provider.name}</span>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] text-left text-[13px]">
+          <thead className="bg-surface-50/80 text-[12px] font-medium text-surface-500 dark:bg-surface-900/50 dark:text-surface-400">
+            <tr><th className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">Pi 等级</th><th className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">映射方式</th><th className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">上游值</th><th className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">结果</th></tr>
+          </thead>
+          <tbody className="divide-y divide-surface-100 dark:divide-surface-800/50">
+            {PI_THINKING_LEVELS.map((level) => {
+              const mode = mappingMode(level);
+              const mappedValue = mappingDraft[level];
+              const isDisabled = !model.reasoning && level !== 'off';
+              return (
+                <tr key={level}>
+                  <td className="px-5 py-3 font-mono text-[12px] font-medium text-surface-900 dark:text-white">{level}</td>
+                  <td className="px-5 py-3"><select value={mode} onChange={(event) => changeMappingMode(level, event.target.value as 'default' | 'value' | 'unsupported')} disabled={isDisabled} aria-label={`${level} 映射方式`} className="rounded-md border border-surface-200 bg-surface-50 px-2.5 py-1.5 text-[12px] text-surface-800 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200"><option value="default">Provider 默认</option><option value="value">指定上游值</option><option value="unsupported">不支持</option></select></td>
+                  <td className="px-5 py-3">{mode === 'value' ? <input value={typeof mappedValue === 'string' ? mappedValue : ''} onChange={(event) => changeMappingValue(level, event.target.value)} aria-label={`${level} 上游值`} placeholder={level === 'off' ? 'none' : level} className="w-48 max-w-full rounded-md border border-surface-200 bg-white px-2.5 py-1.5 font-mono text-[12px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" /> : <span className={`text-[12px] ${mode === 'unsupported' ? 'text-surface-400' : 'text-surface-500'}`}>{mode === 'unsupported' ? '不支持' : level === 'xhigh' || level === 'max' ? '缺省时不启用' : '跟随 Provider 默认'}</span>}</td>
+                  <td className="px-5 py-3 text-[12px]">{mode === 'value' ? <span className="text-emerald-600 dark:text-emerald-400">发送 {mappedValue || '待填写'}</span> : mode === 'unsupported' ? <span className="text-surface-400">隐藏</span> : <span className="text-surface-500">使用默认</span>}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap items-end justify-between gap-4 border-t border-surface-100 bg-surface-50/50 px-5 py-4 dark:border-surface-800 dark:bg-surface-900/20">
+        <div className="flex flex-wrap items-end gap-4">
+          <label className="block space-y-1.5"><span className="text-[11px] font-semibold text-surface-600 dark:text-surface-300">映射来源</span><select value={mappingSource} onChange={(event) => setMappingSource(event.target.value as ThinkingMapSource)} className="block rounded-md border border-surface-200 bg-white px-2.5 py-1.5 text-[12px] text-surface-800 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200">{Object.entries(THINKING_MAP_SOURCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label className="flex items-center gap-2 pb-1.5 text-[12px] text-surface-600 dark:text-surface-300"><input type="checkbox" checked={mappingVerified} onChange={(event) => setMappingVerified(event.target.checked)} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />已完成真实请求验证</label>
+        </div>
+        <button type="button" onClick={() => void saveThinkingMap()} disabled={!mappingChanged || savingMapping} className="inline-flex h-8 shrink-0 items-center rounded-md bg-primary-600 px-3 text-[12px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">{savingMapping ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Save size={13} className="mr-1.5" />}保存为候选配置</button>
+      </div>
+      {mappingError && <div className="mx-5 mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{mappingError}</div>}
     </div>
   );
 }
@@ -775,7 +947,7 @@ function App() {
             {error && <div className="mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
             {notice && <div className="mb-5 flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={14} className="mr-2" />{notice}</div>}
             {activeNav === 'providers' && <ProvidersPage state={state} onAdd={() => setShowAddModal(true)} onRefresh={() => void refreshState()} onDelete={(provider) => void handleDeleteProvider(provider)} />}
-            {activeNav === 'models' && <ModelsPage state={state} onRouteSaved={(nextState) => { setState(nextState); setNotice('默认模型已保存为候选配置'); setError(''); }} />}
+            {activeNav === 'models' && <ModelsPage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
             {(activeNav === 'profiles' || activeNav === 'diagnostics') && <PlaceholderPage state={state} nav={activeNav} />}
           </div>
         </div>

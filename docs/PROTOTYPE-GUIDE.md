@@ -48,7 +48,7 @@ npm run dev
 
 ## 4. 后续开发建议
 
-当前页面已经通过 `web/src/api.ts` 接入本地 Manager API，默认模型路由已可保存为候选配置；循环列表、thinking 映射和完整 Pi 生命周期仍在后续切片中。
+当前页面已经通过 `web/src/api.ts` 接入本地 Manager API，默认模型路由和 thinking 映射都已可保存为候选配置；循环列表和完整 Pi 生命周期仍在后续切片中。
 
 1. **状态管理**：由于有“未保存更改”的机制存在，建议引入 `Zustand` 或 `Redux` 作为单一事实来源 (Single Source of Truth)，来管理底层实际配置与前端草稿配置之间的 Diff 比对。
 2. **API 设计**：继续扩展已有业务接口：

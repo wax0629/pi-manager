@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { writePiProfile } from "../src/profile.mjs";
 import { createStore } from "../src/store.mjs";
+import { getSupportedThinkingLevels } from "../src/thinking.mjs";
 
 process.env.PI_MANAGER_DISABLE_KEYCHAIN = "1";
 
@@ -98,10 +99,55 @@ test("candidate route rejects unsupported thinking levels", (t) => {
   const before = store.snapshot().active;
 
   assert.throws(
-    () => store.setActive({ providerId: "qiniu", modelId: "grok-4.6", thinking: "high" }),
+    () => store.setActive({ providerId: "qiniu", modelId: "gpt-5.6-sol", thinking: "max" }),
     /不支持 Thinking/
   );
   assert.deepEqual(store.get().active, before);
+});
+
+test("thinking maps preserve explicit upstream values and null extended levels", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  const before = store.provider("qiniu").models.find((model) => model.id === "gpt-5.6-luna");
+
+  assert.deepEqual(getSupportedThinkingLevels(before), ["off", "low", "medium", "high", "xhigh"]);
+  assert.equal(before.thinkingLevelMap.max, null);
+
+  store.updateThinkingMap({
+    providerId: "qiniu",
+    modelId: "gpt-5.6-luna",
+    thinkingLevelMap: {
+      off: "none",
+      minimal: null,
+      low: "quick",
+      medium: "balanced",
+      high: "deep",
+      xhigh: null,
+      max: null
+    },
+    source: "user",
+    verified: true
+  });
+
+  const model = store.provider("qiniu").models.find((item) => item.id === "gpt-5.6-luna");
+  assert.deepEqual(getSupportedThinkingLevels(model), ["off", "low", "medium", "high"]);
+  assert.equal(model.thinkingLevelMap.medium, "balanced");
+  assert.equal(model.thinkingMapSource, "user");
+  assert.equal(model.thinkingMapVerified, true);
+});
+
+test("thinking map cannot invalidate the active default route", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+
+  assert.throws(
+    () => store.updateThinkingMap({
+      providerId: "qiniu",
+      modelId: "gpt-5.6-luna",
+      thinkingLevelMap: { medium: null }
+    }),
+    /不支持 Thinking/
+  );
 });
 
 test("candidate route changes remain unapplied until profile application", (t) => {
@@ -114,4 +160,41 @@ test("candidate route changes remain unapplied until profile application", (t) =
   assert.notDeepEqual(store.get().active, before.active);
   assert.equal(store.get().runtime.configRevision > before.runtime.configRevision, true);
   assert.equal(store.get().runtime.appliedRevision, before.runtime.appliedRevision);
+});
+
+test("profile writes the saved thinking map without silently downgrading levels", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  store.addProvider({
+    id: "demo-relay",
+    name: "Demo Relay",
+    baseUrl: "https://relay.example.test/v1",
+    models: [{
+      id: "demo-model",
+      name: "Demo Model",
+      reasoning: true,
+      thinkingLevelMap: { off: "none", medium: "balanced", high: "deep", xhigh: null, max: null }
+    }],
+    apiKey: "test-secret-value"
+  });
+  store.setActive({ providerId: "demo-relay", modelId: "demo-model", thinking: "high" });
+
+  const profile = writePiProfile({ dataDir: fixture.dataDir, state: store.get(), piExecutable: "/usr/bin/pi" });
+  const extension = fs.readFileSync(profile.extensionPath, "utf8");
+
+  assert.match(extension, /"medium": "balanced"/);
+  assert.match(extension, /"high": "deep"/);
+  assert.match(extension, /"xhigh": null/);
+  assert.doesNotMatch(extension, /"max": "high"/);
+});
+
+test("native profiles write model thinking overrides to models.json", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  store.setActive({ providerId: "openai-codex", modelId: "gpt-5.6-luna", thinking: "high" });
+  const profile = writePiProfile({ dataDir: fixture.dataDir, state: store.get(), piExecutable: "/usr/bin/pi" });
+  const models = JSON.parse(fs.readFileSync(profile.modelsPath, "utf8"));
+
+  assert.equal(models.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].thinkingLevelMap.max, "max");
+  assert.equal(models.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].thinkingLevelMap.xhigh, "xhigh");
 });

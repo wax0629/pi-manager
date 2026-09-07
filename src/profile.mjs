@@ -1,21 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { writeJsonAtomic } from "./store.mjs";
+import { assertSupportedThinkingLevel, getThinkingLevelValue } from "./thinking.mjs";
 
 function shellQuote(value) {
   return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
 
 function piThinkingMap(provider, model) {
-  const levels = model.thinkingLevels?.length ? model.thinkingLevels : ["off"];
-  const mapped = {};
-  for (const level of levels) {
-    if (level === "off") mapped[level] = "none";
-    else if (provider.kind === "local-bridge" && level === "xhigh") mapped[level] = "high";
-    else if (provider.kind === "local-bridge" && level === "max") mapped[level] = "high";
-    else mapped[level] = level;
-  }
-  return mapped;
+  return model.thinkingLevelMap || {};
 }
 
 function toPiModel(provider, model) {
@@ -63,6 +56,7 @@ export function writePiProfile({ dataDir, state, piExecutable = "pi" }) {
   if (!provider) throw new Error("当前渠道不存在");
   const model = provider.models.find((item) => item.id === state.active.modelId);
   if (!model) throw new Error("当前模型不存在");
+  assertSupportedThinkingLevel(model, state.active.thinking);
   const gateway = state.gateway || { host: "127.0.0.1", port: 8675, clientKey: "" };
 
   const runtimeDir = path.join(dataDir, "profiles", "active");
@@ -71,6 +65,7 @@ export function writePiProfile({ dataDir, state, piExecutable = "pi" }) {
   fs.mkdirSync(extensionsDir, { recursive: true, mode: 0o700 });
   const extensionPath = path.join(extensionsDir, "pi-manager-provider.ts");
   const settingsPath = path.join(piDir, "settings.json");
+  const modelsPath = path.join(piDir, "models.json");
   const launcherPath = path.join(runtimeDir, process.platform === "darwin" ? "launch-pi.command" : "launch-pi.sh");
 
   const native = provider.kind === "native-subscription";
@@ -88,12 +83,37 @@ export function writePiProfile({ dataDir, state, piExecutable = "pi" }) {
   writeJsonAtomic(settingsPath, settings);
 
   if (native) {
-    try {
-      fs.unlinkSync(extensionPath);
-    } catch {
-      // Native subscriptions do not need a custom provider extension.
+    for (const filePath of [extensionPath]) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch {
+        // Native subscriptions do not need a custom provider extension.
+      }
+    }
+    const modelOverrides = Object.fromEntries(
+      provider.models
+        .filter((item) => item.reasoning && item.thinkingLevelMap && Object.keys(item.thinkingLevelMap).length > 0)
+        .map((item) => [item.id, { thinkingLevelMap: item.thinkingLevelMap }])
+    );
+    if (Object.keys(modelOverrides).length > 0) {
+      writeJsonAtomic(modelsPath, {
+        providers: {
+          [provider.piProvider || provider.id]: { modelOverrides }
+        }
+      });
+    } else {
+      try {
+        fs.unlinkSync(modelsPath);
+      } catch {
+        // No model override is needed for this native profile.
+      }
     }
   } else {
+    try {
+      fs.unlinkSync(modelsPath);
+    } catch {
+      // Custom providers use the generated extension instead of models.json.
+    }
     const piModels = provider.models.map((item) => toPiModel(provider, item));
     const extension = [
       'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
@@ -122,6 +142,7 @@ export function writePiProfile({ dataDir, state, piExecutable = "pi" }) {
     providerName: provider.name,
     modelId: model.id,
     thinking: state.active.thinking,
+    thinkingValue: getThinkingLevelValue(model, state.active.thinking),
     mode: native ? "native-subscription" : "manager-gateway"
   });
 
@@ -136,7 +157,7 @@ export function writePiProfile({ dataDir, state, piExecutable = "pi" }) {
     piExecutable
   });
 
-  return { runtimeDir, extensionPath, settingsPath, launcherPath, manifestPath, mode: native ? "native-subscription" : "manager-gateway" };
+  return { runtimeDir, extensionPath, settingsPath, modelsPath, launcherPath, manifestPath, mode: native ? "native-subscription" : "manager-gateway" };
 }
 
 export { piThinkingMap, shellQuote, toPiModel };

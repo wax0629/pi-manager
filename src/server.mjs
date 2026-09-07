@@ -303,6 +303,12 @@ async function handleApi(req, res, pathname) {
     sendJson(res, 200, { ok: true, state: await publicState() });
     return;
   }
+  if (req.method === "PATCH" && pathname === "/api/models/thinking") {
+    const body = await parseBody(req);
+    store.updateThinkingMap(body);
+    sendJson(res, 200, { ok: true, state: await publicState() });
+    return;
+  }
   if (req.method === "POST" && pathname === "/api/apply") {
     const provider = store.provider(store.get().active.providerId);
     if (provider?.kind !== "native-subscription" && store.get().gateway.enabled && !gateway.isRunning()) await startGateway();

@@ -4,6 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import { clone, createDefaultState } from "./defaults.mjs";
 import { deleteSecret, getSecret, hasSecret, setSecret } from "./secrets.mjs";
+import {
+  THINKING_MAP_SOURCES,
+  assertSupportedThinkingLevel,
+  getSupportedThinkingLevels,
+  normalizeThinkingLevelMap,
+  normalizeThinkingMapSource,
+  validateThinkingLevelMap
+} from "./thinking.mjs";
 
 function safeId(value) {
   return String(value || "")
@@ -21,13 +29,22 @@ function normalizeModel(item) {
   if (!source || typeof source !== "object") return null;
   const id = String(source.id || "").trim();
   if (!id) return null;
+  const reasoning = Boolean(source.reasoning);
+  const legacyThinkingLevels = Array.isArray(source.thinkingLevels)
+    ? source.thinkingLevels.map((level) => String(level))
+    : undefined;
+  const thinkingLevelMap = normalizeThinkingLevelMap(source.thinkingLevelMap, {
+    reasoning,
+    thinkingLevels: legacyThinkingLevels
+  });
   return {
     id,
     name: String(source.name || id).trim() || id,
-    reasoning: Boolean(source.reasoning),
-    thinkingLevels: Array.isArray(source.thinkingLevels) && source.thinkingLevels.length
-      ? source.thinkingLevels.map((level) => String(level))
-      : ["off"],
+    reasoning,
+    thinkingLevels: getSupportedThinkingLevels({ reasoning, thinkingLevelMap }),
+    thinkingLevelMap,
+    thinkingMapSource: normalizeThinkingMapSource(source.thinkingMapSource),
+    thinkingMapVerified: Boolean(source.thinkingMapVerified),
     input: Array.isArray(source.input) && source.input.length ? source.input.map((item) => String(item)) : ["text"],
     contextWindow: Number(source.contextWindow) || 128000,
     maxTokens: Number(source.maxTokens) || 32000,
@@ -56,7 +73,7 @@ function mergeProvider(defaultProvider, savedProvider) {
     ...defaultProvider,
     ...savedProvider,
     models: Array.isArray(savedProvider?.models) && savedProvider.models.length
-      ? savedProvider.models
+      ? savedProvider.models.map(normalizeModel).filter(Boolean)
       : defaultProvider.models
   };
 }
@@ -66,7 +83,12 @@ function normalizeState(defaultState, savedState) {
   const providersById = new Map((savedState.providers || []).map((provider) => [provider.id, provider]));
   const providers = defaultState.providers.map((provider) => mergeProvider(provider, providersById.get(provider.id)));
   for (const provider of savedState.providers || []) {
-    if (!providers.some((item) => item.id === provider.id)) providers.push(provider);
+    if (!providers.some((item) => item.id === provider.id)) {
+      providers.push({
+        ...provider,
+        models: Array.isArray(provider.models) ? provider.models.map(normalizeModel).filter(Boolean) : []
+      });
+    }
   }
   const merged = {
     ...defaultState,
@@ -161,13 +183,33 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
       if (!provider) throw new Error("渠道不存在");
       const model = provider.models.find((item) => item.id === modelId);
       if (!model) throw new Error("模型不存在");
-      const levels = model.thinkingLevels?.length ? model.thinkingLevels : ["off"];
+      const levels = getSupportedThinkingLevels(model);
       const nextThinking = thinking === undefined || thinking === null ? levels[levels.length - 1] : String(thinking);
-      if (!levels.includes(nextThinking)) throw new Error(`模型 ${model.id} 不支持 Thinking: ${nextThinking}`);
+      assertSupportedThinkingLevel(model, nextThinking);
       state.active = { providerId, modelId, thinking: nextThinking };
       store.touchConfiguration();
       store.recordEvent("route", `已切换到 ${provider.name} / ${model.name}`, nextThinking);
       return state.active;
+    },
+    updateThinkingMap({ providerId, modelId, thinkingLevelMap, source = "user", verified = false }) {
+      const provider = store.provider(providerId);
+      if (!provider) throw new Error("渠道不存在");
+      const model = provider.models.find((item) => item.id === modelId);
+      if (!model) throw new Error("模型不存在");
+      if (!THINKING_MAP_SOURCES.includes(source)) throw new Error(`未知 Thinking 映射来源: ${source}`);
+      const normalizedMap = validateThinkingLevelMap(thinkingLevelMap, { reasoning: model.reasoning });
+      const nextModel = { ...model, thinkingLevelMap: normalizedMap };
+      const nextLevels = getSupportedThinkingLevels(nextModel);
+      if (state.active.providerId === providerId && state.active.modelId === modelId) {
+        assertSupportedThinkingLevel(nextModel, state.active.thinking);
+      }
+      model.thinkingLevelMap = normalizedMap;
+      model.thinkingLevels = nextLevels;
+      model.thinkingMapSource = source;
+      model.thinkingMapVerified = Boolean(verified);
+      store.touchConfiguration();
+      store.recordEvent("model", `已更新 ${provider.name} / ${model.name} Thinking 映射`, source);
+      return model;
     },
     addProvider({ id: requestedId, name, kind = "openai-api", baseUrl, models = [], credentialEnv = "", apiKey = "" }) {
       const normalizedName = String(name || "").trim();

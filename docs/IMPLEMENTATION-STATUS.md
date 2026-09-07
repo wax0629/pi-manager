@@ -14,9 +14,9 @@ Add provider form
   -> /api/providers
   -> provider metadata + local credential storage
 
-Model default controls
-  -> /api/route
-  -> validated candidate route
+Model default controls and Thinking mapping
+  -> /api/route + /api/models/thinking
+  -> validated candidate route + capability-checked Thinking mapping
 ```
 
 The implementation uses the existing card layout from the prototype as the
@@ -46,6 +46,8 @@ new decision if the information is intentionally folded into the provider page.
   returning the key in API state.
 - Keep provider cards focused on connection resources; configure the default
   provider, model and thinking level from the model resource page.
+- Edit thinking-level mappings with Pi-level vs upstream-value vs unsupported
+  states, then persist them through the manager state and profile generator.
 - Validate candidate routes against provider credentials, bridge status and
   model thinking capabilities before saving them.
 - Track a minimal candidate revision and applied revision so the UI can
@@ -56,7 +58,7 @@ new decision if the information is intentionally folded into the provider page.
 ## Deferred
 
 - Pi-native OAuth PTY flow;
-- cycling-list ordering and thinking-map editing;
+- cycling-list ordering;
 - profile diff preview, rollback and process ownership;
 - real provider connection tests and model discovery;
 - Antigravity adapter.
@@ -73,4 +75,6 @@ npm --prefix web run build
 
 Manual verification also requires starting the Manager API and the Vite web
 server, then adding a provider through the UI and confirming that a subsequent
-refresh reads it from the persisted Manager state.
+refresh reads it from the persisted Manager state. Live Pi startup on this
+machine is still gated on having the Pi executable available, so the native
+profile handoff path remains runtime-verified rather than fully exercised here.

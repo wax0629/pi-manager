@@ -1,4 +1,14 @@
 import path from "node:path";
+import { buildThinkingLevelMap } from "./thinking.mjs";
+
+function catalogModel(model) {
+  return {
+    ...model,
+    thinkingLevelMap: buildThinkingLevelMap(model),
+    thinkingMapSource: "provider-default",
+    thinkingMapVerified: false
+  };
+}
 
 const qiniuModels = [
   {
@@ -38,14 +48,14 @@ const qiniuModels = [
     id: "grok-4.6",
     name: "Grok 4.6",
     family: "Grok",
-    reasoning: false,
-    thinkingLevels: ["off"],
-    input: ["text"],
-    contextWindow: 256000,
+    reasoning: true,
+    thinkingLevels: ["low", "medium", "high", "xhigh"],
+    input: ["text", "image"],
+    contextWindow: 500000,
     maxTokens: 64000,
     cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3 }
   }
-];
+].map(catalogModel);
 
 const antigravityModels = [
   {
@@ -70,7 +80,7 @@ const antigravityModels = [
     maxTokens: 32000,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
   }
-];
+].map(catalogModel);
 
 const codexModels = [
   {
@@ -106,7 +116,7 @@ const codexModels = [
     maxTokens: 128000,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
   }
-];
+].map(catalogModel);
 
 export function createDefaultState({ projectRoot }) {
   const bridgePath = path.join(projectRoot, "antigravity-bridge");

@@ -70,6 +70,19 @@ export async function routeProvider(input: {
   });
 }
 
+export async function updateModelThinking(input: {
+  providerId: string;
+  modelId: string;
+  thinkingLevelMap: Record<string, string | null>;
+  source: string;
+  verified: boolean;
+}): Promise<{ ok: true; state: ManagerState }> {
+  return request<{ ok: true; state: ManagerState }>('/api/models/thinking', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
 export async function applyProfile(): Promise<{ ok: true; state: ManagerState }> {
   return request<{ ok: true; state: ManagerState }>('/api/apply', {
     method: 'POST',

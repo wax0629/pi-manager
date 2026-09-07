@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import http from "node:http";
+import { getThinkingLevelValue } from "./thinking.mjs";
 
 function sendJson(res, status, value) {
   const body = JSON.stringify(value);
@@ -75,6 +76,12 @@ export function createGateway({ getState, getCredential, onRequest = () => {} })
     return state.providers.find((provider) => provider.id === state.active.providerId);
   }
 
+  function currentModel() {
+    const state = getState();
+    const provider = currentProvider();
+    return provider?.models.find((model) => model.id === state.active.modelId);
+  }
+
   async function handle(req, res) {
     const url = new URL(req.url || "/", "http://127.0.0.1");
     if (req.method === "OPTIONS") {
@@ -94,9 +101,15 @@ export function createGateway({ getState, getCredential, onRequest = () => {} })
 
     const provider = currentProvider();
     if (url.pathname === "/health" && req.method === "GET") {
+      const model = currentModel();
       sendJson(res, 200, {
         status: "ok",
-        route: { providerId: provider?.id || "", modelId: state.active.modelId },
+        route: {
+          providerId: provider?.id || "",
+          modelId: state.active.modelId,
+          thinking: state.active.thinking,
+          upstreamThinking: getThinkingLevelValue(model, state.active.thinking)
+        },
         stats
       });
       return;

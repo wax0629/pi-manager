@@ -1,5 +1,8 @@
 export type ProviderKind = 'openai-api' | 'local-bridge' | 'native-subscription';
 export type ProviderStatus = 'ready' | 'not-configured' | 'offline' | 'error';
+export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type ThinkingMapSource = 'provider-default' | 'provider-docs' | 'request-probe' | 'user';
+export type ThinkingLevelMap = Partial<Record<ThinkingLevel, string | null>>;
 
 export interface ModelCost {
   input: number;
@@ -13,7 +16,10 @@ export interface ModelDefinition {
   name: string;
   family?: string;
   reasoning: boolean;
-  thinkingLevels: string[];
+  thinkingLevels: ThinkingLevel[];
+  thinkingLevelMap: ThinkingLevelMap;
+  thinkingMapSource: ThinkingMapSource;
+  thinkingMapVerified: boolean;
   input: string[];
   contextWindow: number;
   maxTokens: number;
