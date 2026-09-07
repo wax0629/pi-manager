@@ -37,17 +37,18 @@ npm run dev
 ### 步骤三：管理模型目录 (Model Catalog)
 1. 点击左侧导航栏的 **模型资源库**。
 2. 在这里可以看到所有 `Provider` 底下模型的全局只读视图（包含 Capability、Thinking 等级和来源）。
-3. 完整目录、循环列表和默认模型的编辑能力会在后续模型策略切片中接入。
+3. 切换到 **默认模型**，选择已连接的 Provider、Model 和该模型支持的 Thinking 等级。
+4. 点击 `保存为候选配置`。这一步只更新 Manager 的候选 revision，不会立即改变正在运行的 Pi。
 
 ### 步骤四：统一部署与模拟注入 (Deploy Flow)
-1. 新增 provider 后点击右上角 `部署变更`。
-2. 弹出 **配置变更预览**，显示候选 revision、当前路由和目标 profile。
+1. 新增 provider 并在模型资源库保存默认模型后，点击右上角 `部署变更`。
+2. 弹出 **配置变更预览**，显示候选 revision、默认模型和目标 profile。
 3. 点击 `应用配置`，前端调用 `POST /api/apply`。
 4. **观察点**：应用成功后返回新的 state，`appliedRevision` 与候选 revision 一致，按钮恢复不可用。
 
 ## 4. 后续开发建议
 
-当前页面已经通过 `web/src/api.ts` 接入本地 Manager API，但模型策略和完整 Pi 生命周期仍保留为原型状态。后续工程化建议：
+当前页面已经通过 `web/src/api.ts` 接入本地 Manager API，默认模型路由已可保存为候选配置；循环列表、thinking 映射和完整 Pi 生命周期仍在后续切片中。
 
 1. **状态管理**：由于有“未保存更改”的机制存在，建议引入 `Zustand` 或 `Redux` 作为单一事实来源 (Single Source of Truth)，来管理底层实际配置与前端草稿配置之间的 Diff 比对。
 2. **API 设计**：继续扩展已有业务接口：

@@ -13,10 +13,12 @@ The first implementation slice supports:
 - model metadata and thinking-level mappings;
 - isolated Pi profiles that can be applied, launched, and rolled back.
 
-The current slice connects the provider card view to the local Manager API. It
-can read the persisted provider state and add a custom OpenAI-compatible
-provider, including local credential storage. Model policy editing and the
-remaining Pi lifecycle flows are still being implemented.
+The current slice connects the provider and model views to the local Manager
+API. It can read persisted provider state, add a custom OpenAI-compatible
+provider, store its credential through the local credential abstraction, and
+save a validated default provider/model/thinking route as a candidate change.
+Cycling-list editing, thinking-map editing, and the remaining Pi lifecycle
+flows are still being implemented.
 
 Pi Manager is intended to work with the official Pi package. It does not fork
 Pi or modify a user's project `.pi` directory by default.

@@ -13,6 +13,10 @@ React provider cards
 Add provider form
   -> /api/providers
   -> provider metadata + local credential storage
+
+Model default controls
+  -> /api/route
+  -> validated candidate route
 ```
 
 The implementation uses the existing card layout from the prototype as the
@@ -40,6 +44,10 @@ new decision if the information is intentionally folded into the provider page.
 - Add a custom OpenAI-compatible provider with one or more model IDs.
 - Save an optional API key through the existing credential abstraction without
   returning the key in API state.
+- Keep provider cards focused on connection resources; configure the default
+  provider, model and thinking level from the model resource page.
+- Validate candidate routes against provider credentials, bridge status and
+  model thinking capabilities before saving them.
 - Track a minimal candidate revision and applied revision so the UI can
   distinguish unsaved candidate changes from the last applied profile.
 - Serve `web/dist` from the Node server after a production build and proxy
@@ -48,7 +56,7 @@ new decision if the information is intentionally folded into the provider page.
 ## Deferred
 
 - Pi-native OAuth PTY flow;
-- complete model catalog, cycling-list ordering and thinking-map editing;
+- cycling-list ordering and thinking-map editing;
 - profile diff preview, rollback and process ownership;
 - real provider connection tests and model discovery;
 - Antigravity adapter.

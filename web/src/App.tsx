@@ -23,6 +23,7 @@ import {
   createProvider,
   deleteProvider,
   getState,
+  routeProvider,
 } from './api';
 import type {
   CreateProviderInput,
@@ -53,6 +54,10 @@ function statusMeta(status: ProviderState['status']) {
 function thinkingSummary(model: ModelDefinition) {
   if (!model.reasoning) return '关闭';
   return model.thinkingLevels.filter((level) => level !== 'off').join(' / ') || '未验证';
+}
+
+function supportedThinkingLevels(model: ModelDefinition) {
+  return model.reasoning ? model.thinkingLevels : ['off'];
 }
 
 function Sidebar({ activeNav, onNavigate, piInstalled }: { activeNav: NavId; onNavigate: (nav: NavId) => void; piInstalled: boolean }) {
@@ -502,14 +507,66 @@ function DeployModal({ state, isOpen, onClose, onApplied }: { state: ManagerStat
   );
 }
 
-function ModelsPage({ state }: { state: ManagerState }) {
+function ModelsPage({ state, onRouteSaved }: { state: ManagerState; onRouteSaved: (nextState: ManagerState) => void }) {
   const [activeTab, setActiveTab] = useState<'catalog' | 'cycle' | 'default'>('catalog');
   const [query, setQuery] = useState('');
+  const [selectedProviderId, setSelectedProviderId] = useState(state.active.providerId);
+  const [selectedModelId, setSelectedModelId] = useState(state.active.modelId);
+  const [selectedThinking, setSelectedThinking] = useState(state.active.thinking);
+  const [savingRoute, setSavingRoute] = useState(false);
+  const [routeError, setRouteError] = useState('');
   const models = useMemo(() => state.providers.flatMap((provider) => provider.models.map((model) => ({ provider, model }))), [state.providers]);
   const visibleModels = models.filter(({ provider, model }) => {
     const value = `${provider.id}/${model.id} ${model.name}`.toLowerCase();
     return !query.trim() || value.includes(query.trim().toLowerCase());
   });
+  const providerOptions = state.providers.filter((provider) => provider.models.length > 0);
+  const selectedProvider = state.providers.find((provider) => provider.id === selectedProviderId);
+  const selectedModel = selectedProvider?.models.find((model) => model.id === selectedModelId);
+  const thinkingLevels = selectedModel ? supportedThinkingLevels(selectedModel) : [];
+  const routeIsValid = Boolean(selectedProvider && selectedModel && selectedProvider.status === 'ready' && thinkingLevels.includes(selectedThinking));
+  const routeChanged = selectedProviderId !== state.active.providerId
+    || selectedModelId !== state.active.modelId
+    || selectedThinking !== state.active.thinking;
+
+  const handleProviderChange = (providerId: string) => {
+    const provider = state.providers.find((item) => item.id === providerId);
+    const model = provider?.models[0];
+    const levels = model ? supportedThinkingLevels(model) : [];
+    setSelectedProviderId(providerId);
+    setSelectedModelId(model?.id || '');
+    setSelectedThinking(levels.includes(state.active.thinking) ? state.active.thinking : levels.at(-1) || 'off');
+    setRouteError('');
+  };
+
+  const handleModelChange = (modelId: string) => {
+    const model = selectedProvider?.models.find((item) => item.id === modelId);
+    const levels = model ? supportedThinkingLevels(model) : [];
+    setSelectedModelId(modelId);
+    setSelectedThinking(levels.includes(selectedThinking) ? selectedThinking : levels.at(-1) || 'off');
+    setRouteError('');
+  };
+
+  const saveDefaultRoute = async () => {
+    if (!selectedProvider || !selectedModel || !routeIsValid) {
+      setRouteError('请选择已连接的供应商、可用模型和该模型支持的 Thinking 等级。');
+      return;
+    }
+    setSavingRoute(true);
+    setRouteError('');
+    try {
+      const response = await routeProvider({
+        providerId: selectedProvider.id,
+        modelId: selectedModel.id,
+        thinking: selectedThinking,
+      });
+      onRouteSaved(response.state);
+    } catch (caughtError) {
+      setRouteError(caughtError instanceof ApiError ? caughtError.message : '保存默认模型失败。');
+    } finally {
+      setSavingRoute(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -534,7 +591,7 @@ function ModelsPage({ state }: { state: ManagerState }) {
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
               <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索模型 ID" aria-label="搜索模型 ID" className="w-full rounded-md border border-surface-200 bg-white py-1.5 pl-8 pr-3 text-[13px] outline-none focus:border-surface-400 dark:border-surface-700 dark:bg-[#0a0a0a] dark:text-white" />
             </div>
-            <span className="text-[12px] text-surface-500">有效目录只读展示</span>
+            <span className="text-[12px] text-surface-500">目录来源只读；使用策略在下方配置</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-[13px]">
@@ -556,7 +613,7 @@ function ModelsPage({ state }: { state: ManagerState }) {
                     <td className="px-4 py-3 text-[12px] text-surface-500">{model.input.join(', ')}</td>
                     <td className="px-4 py-3 text-[12px] text-surface-500">{thinkingSummary(model)}</td>
                     <td className="px-4 py-3 font-mono text-[12px] text-surface-500">{Math.round(model.contextWindow / 1000)}K</td>
-                    <td className="px-4 py-3">{provider.id === state.active.providerId && model.id === state.active.modelId ? <span className="text-primary-600 dark:text-primary-400">当前</span> : provider.status === 'ready' ? <span className="text-surface-400">可用</span> : <span className="text-amber-600 dark:text-amber-400">{statusMeta(provider.status).label}</span>}</td>
+                    <td className="px-4 py-3">{provider.id === state.active.providerId && model.id === state.active.modelId ? <span className="text-primary-600 dark:text-primary-400">默认</span> : provider.status === 'ready' ? <span className="text-surface-400">可用</span> : <span className="text-amber-600 dark:text-amber-400">{statusMeta(provider.status).label}</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -574,12 +631,53 @@ function ModelsPage({ state }: { state: ManagerState }) {
       )}
 
       {activeTab === 'default' && (
-        <div className="max-w-xl rounded-xl border border-surface-200 bg-white p-6 dark:border-surface-800 dark:bg-[#0a0a0a]">
+        <div className="max-w-3xl rounded-xl border border-surface-200 bg-white p-6 dark:border-surface-800 dark:bg-[#0a0a0a]">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-100 text-surface-500 dark:bg-surface-800"><CheckCircle2 size={17} /></div>
-            <div><h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">当前默认路由</h2><p className="text-[12px] text-surface-500">来自后端 active route</p></div>
+            <div><h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">默认模型</h2><p className="text-[12px] text-surface-500">选择实际使用的 provider、model 和 Thinking 等级</p></div>
           </div>
-          <dl className="grid grid-cols-[100px_1fr] gap-y-3 text-[13px]"><dt className="text-surface-500">Provider</dt><dd className="text-surface-900 dark:text-white">{state.active.providerName}</dd><dt className="text-surface-500">Model</dt><dd className="font-mono text-surface-900 dark:text-white">{state.active.providerId}/{state.active.modelId}</dd><dt className="text-surface-500">Thinking</dt><dd className="text-surface-900 dark:text-white">{state.active.thinking}</dd></dl>
+          <div className="grid gap-4 md:grid-cols-3">
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Provider</span>
+              <select value={selectedProviderId} onChange={(event) => handleProviderChange(event.target.value)} disabled={providerOptions.length === 0} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+                {providerOptions.length === 0 && <option value="">暂无模型来源</option>}
+                {providerOptions.map((provider) => (
+                  <option key={provider.id} value={provider.id}>{provider.name}{provider.status === 'ready' ? '' : ` · ${statusMeta(provider.status).label}`}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Model</span>
+              <select value={selectedModelId} onChange={(event) => handleModelChange(event.target.value)} disabled={!selectedProvider || selectedProvider.models.length === 0} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+                {!selectedProvider && <option value="">请先选择 Provider</option>}
+                {selectedProvider?.models.map((model) => <option key={model.id} value={model.id}>{model.id}</option>)}
+              </select>
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Thinking</span>
+              <select value={selectedThinking} onChange={(event) => { setSelectedThinking(event.target.value); setRouteError(''); }} disabled={!selectedModel} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+                {thinkingLevels.map((level) => <option key={level} value={level}>{level}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-md bg-surface-50 px-4 py-3 text-[12px] dark:bg-surface-900/50">
+            <div className="min-w-0">
+              <div className="font-mono text-surface-900 dark:text-white">{selectedProvider && selectedModel ? `${selectedProvider.id}/${selectedModel.id}` : '尚未选择模型'}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-surface-500">
+                <span>{selectedProvider ? `认证：${selectedProvider.status === 'ready' ? '已就绪' : statusMeta(selectedProvider.status).label}` : '请选择供应商'}</span>
+                <span>{selectedModel ? `支持：${thinkingLevels.join(' / ')}` : '未读取模型能力'}</span>
+              </div>
+            </div>
+            <button type="button" onClick={() => void saveDefaultRoute()} disabled={!routeIsValid || !routeChanged || savingRoute} className="flex h-8 shrink-0 items-center rounded-md bg-primary-600 px-3 text-[12px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">
+              {savingRoute && <Loader2 size={13} className="mr-1.5 animate-spin" />}
+              保存为候选配置
+            </button>
+          </div>
+          <div className="mt-3 flex items-center justify-between text-[11px] text-surface-500">
+            <span>保存后不会立即改变正在运行的 Pi</span>
+            <span>revision {state.configuration.revision} · 已应用 {state.configuration.appliedRevision}</span>
+          </div>
+          {routeError && <div className="mt-4 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{routeError}</div>}
         </div>
       )}
     </div>
@@ -677,7 +775,7 @@ function App() {
             {error && <div className="mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
             {notice && <div className="mb-5 flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={14} className="mr-2" />{notice}</div>}
             {activeNav === 'providers' && <ProvidersPage state={state} onAdd={() => setShowAddModal(true)} onRefresh={() => void refreshState()} onDelete={(provider) => void handleDeleteProvider(provider)} />}
-            {activeNav === 'models' && <ModelsPage state={state} />}
+            {activeNav === 'models' && <ModelsPage state={state} onRouteSaved={(nextState) => { setState(nextState); setNotice('默认模型已保存为候选配置'); setError(''); }} />}
             {(activeNav === 'profiles' || activeNav === 'diagnostics') && <PlaceholderPage state={state} nav={activeNav} />}
           </div>
         </div>

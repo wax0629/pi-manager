@@ -286,11 +286,21 @@ async function handleApi(req, res, pathname) {
   }
   if (req.method === "POST" && pathname === "/api/route") {
     const body = await parseBody(req);
-    store.setActive({ providerId: body.providerId, modelId: body.modelId, thinking: body.thinking });
     const provider = store.provider(body.providerId);
-    if (provider?.kind !== "native-subscription" && store.get().gateway.enabled && !gateway.isRunning()) await startGateway();
-    const profile = applyProfile();
-    sendJson(res, 200, { ok: true, profile, state: await publicState() });
+    if (!provider) throw new Error("渠道不存在");
+    const model = provider.models.find((item) => item.id === body.modelId);
+    if (!model) throw new Error("模型不存在");
+    if (provider.kind === "native-subscription" && !detectPi().subscriptionReady) {
+      throw new Error(`渠道 ${provider.name} 尚未完成 Pi 原生授权`);
+    }
+    if (provider.kind !== "native-subscription" && !store.credentialConfigured(provider)) {
+      throw new Error(`渠道 ${provider.name} 尚未配置凭据`);
+    }
+    if (provider.kind === "local-bridge" && !(await bridgeStatus(provider)).running) {
+      throw new Error(`渠道 ${provider.name} 的本地桥接未运行`);
+    }
+    store.setActive({ providerId: body.providerId, modelId: body.modelId, thinking: body.thinking });
+    sendJson(res, 200, { ok: true, state: await publicState() });
     return;
   }
   if (req.method === "POST" && pathname === "/api/apply") {

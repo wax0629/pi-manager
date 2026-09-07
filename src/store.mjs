@@ -162,7 +162,8 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
       const model = provider.models.find((item) => item.id === modelId);
       if (!model) throw new Error("模型不存在");
       const levels = model.thinkingLevels?.length ? model.thinkingLevels : ["off"];
-      const nextThinking = levels.includes(thinking) ? thinking : levels[levels.length - 1];
+      const nextThinking = thinking === undefined || thinking === null ? levels[levels.length - 1] : String(thinking);
+      if (!levels.includes(nextThinking)) throw new Error(`模型 ${model.id} 不支持 Thinking: ${nextThinking}`);
       state.active = { providerId, modelId, thinking: nextThinking };
       store.touchConfiguration();
       store.recordEvent("route", `已切换到 ${provider.name} / ${model.name}`, nextThinking);

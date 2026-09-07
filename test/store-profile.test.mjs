@@ -91,3 +91,27 @@ test("profile generation writes an isolated custom provider extension without th
   assert.equal(launcher.includes("'demo-model'"), true);
   assert.equal(launcher.includes("test-secret-value"), false);
 });
+
+test("candidate route rejects unsupported thinking levels", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  const before = store.snapshot().active;
+
+  assert.throws(
+    () => store.setActive({ providerId: "qiniu", modelId: "grok-4.6", thinking: "high" }),
+    /不支持 Thinking/
+  );
+  assert.deepEqual(store.get().active, before);
+});
+
+test("candidate route changes remain unapplied until profile application", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  const before = store.snapshot();
+
+  store.setActive({ providerId: "qiniu", modelId: "gpt-5.6-sol", thinking: "high" });
+
+  assert.notDeepEqual(store.get().active, before.active);
+  assert.equal(store.get().runtime.configRevision > before.runtime.configRevision, true);
+  assert.equal(store.get().runtime.appliedRevision, before.runtime.appliedRevision);
+});
