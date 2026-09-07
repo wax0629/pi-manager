@@ -129,6 +129,13 @@ export function createDefaultState({ projectRoot }) {
       modelId: "gpt-5.6-luna",
       thinking: "medium"
     },
+    cycle: {
+      modelRefs: [
+        "qiniu/gpt-5.6-luna",
+        "openai-codex/gpt-5.6-luna",
+        "qiniu/gpt-5.6-sol"
+      ]
+    },
     gateway: {
       enabled: true,
       host: "127.0.0.1",

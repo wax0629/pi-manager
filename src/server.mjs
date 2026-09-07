@@ -38,6 +38,40 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function resolveCycleEntries(current, providers) {
+  const providersById = new Map(providers.map((provider) => [provider.id, provider]));
+  const refs = Array.isArray(current.cycle?.modelRefs) ? current.cycle.modelRefs : [];
+
+  return refs.map((ref, index) => {
+    const normalizedRef = String(ref || "").trim();
+    const slashIndex = normalizedRef.indexOf("/");
+    const providerId = slashIndex > 0 ? normalizedRef.slice(0, slashIndex) : "";
+    const modelId = slashIndex > 0 ? normalizedRef.slice(slashIndex + 1) : "";
+    const provider = providersById.get(providerId);
+    const model = provider?.models.find((item) => item.id === modelId);
+    const valid = Boolean(provider && model && provider.status === "ready");
+    return {
+      index,
+      ref: normalizedRef,
+      providerId,
+      providerName: provider?.name || providerId,
+      providerStatus: provider?.status || "missing",
+      modelId,
+      modelName: model?.name || modelId,
+      valid,
+      reason: !provider ? "provider-missing" : !model ? "model-missing" : provider.status !== "ready" ? "provider-unready" : "ok"
+    };
+  });
+}
+
+async function ensureCycleListReady() {
+  const snapshot = await publicState();
+  const invalid = snapshot.cycle.entries.filter((entry) => !entry.valid);
+  if (invalid.length > 0) {
+    throw new Error(`循环列表包含不可用模型: ${invalid.map((entry) => entry.ref).join(" / ")}`);
+  }
+}
+
 function sendJson(res, status, value) {
   const body = JSON.stringify(value);
   res.statusCode = status;
@@ -175,6 +209,10 @@ async function publicState() {
   return {
     app: { name: "Pi Manager", version: "0.1.0", platform: process.platform },
     targetProject: current.targetProject,
+    cycle: {
+      modelRefs: Array.isArray(current.cycle?.modelRefs) ? current.cycle.modelRefs : [],
+      entries: resolveCycleEntries(current, providers)
+    },
     active: {
       ...current.active,
       providerName: activeProvider?.name || current.active.providerId,
@@ -241,6 +279,7 @@ async function stopGateway() {
 }
 
 async function launchPi() {
+  await ensureCycleListReady();
   const activeProvider = store.provider(store.get().active.providerId);
   if (activeProvider?.kind !== "native-subscription" && store.get().gateway.enabled && !gateway.isRunning()) await startGateway();
   const profile = applyProfile();
@@ -310,10 +349,17 @@ async function handleApi(req, res, pathname) {
     return;
   }
   if (req.method === "POST" && pathname === "/api/apply") {
+    await ensureCycleListReady();
     const provider = store.provider(store.get().active.providerId);
     if (provider?.kind !== "native-subscription" && store.get().gateway.enabled && !gateway.isRunning()) await startGateway();
     const profile = applyProfile();
     sendJson(res, 200, { ok: true, profile, state: await publicState() });
+    return;
+  }
+  if (req.method === "PATCH" && pathname === "/api/models/cycle") {
+    const body = await parseBody(req);
+    store.updateCycleList(body.modelRefs);
+    sendJson(res, 200, { ok: true, state: await publicState() });
     return;
   }
   if (req.method === "POST" && pathname === "/api/pi/launch") {

@@ -17,8 +17,8 @@ The current slice connects the provider and model views to the local Manager
 API. It can read persisted provider state, add a custom OpenAI-compatible
 provider, store its credential through the local credential abstraction, and
 save a validated default provider/model/thinking route as a candidate change.
-Thinking-map editing is now part of the current slice. Cycling-list editing
-and the remaining Pi lifecycle flows are still being implemented.
+Thinking-map editing and cycling-list editing are now part of the current
+slice. The remaining Pi lifecycle flows are still being implemented.
 
 Pi Manager is intended to work with the official Pi package. It does not fork
 Pi or modify a user's project `.pi` directory by default.

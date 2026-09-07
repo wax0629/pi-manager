@@ -38,7 +38,8 @@ npm run dev
 1. 点击左侧导航栏的 **模型资源库**。
 2. 在这里可以看到所有 `Provider` 底下模型的全局只读视图（包含 Capability、Thinking 等级和来源）。
 3. 切换到 **默认模型**，选择已连接的 Provider、Model 和该模型支持的 Thinking 等级。
-4. 点击 `保存为候选配置`。这一步只更新 Manager 的候选 revision，不会立即改变正在运行的 Pi。
+4. 切换到 **循环列表**，把想保留的模型加入列表并调整顺序。
+5. 点击 `保存为候选配置`。这一步只更新 Manager 的候选 revision，不会立即改变正在运行的 Pi。
 
 ### 步骤四：统一部署与模拟注入 (Deploy Flow)
 1. 新增 provider 并在模型资源库保存默认模型后，点击右上角 `部署变更`。
@@ -48,7 +49,7 @@ npm run dev
 
 ## 4. 后续开发建议
 
-当前页面已经通过 `web/src/api.ts` 接入本地 Manager API，默认模型路由和 thinking 映射都已可保存为候选配置；循环列表和完整 Pi 生命周期仍在后续切片中。
+当前页面已经通过 `web/src/api.ts` 接入本地 Manager API，默认模型路由、循环列表和 thinking 映射都已可保存为候选配置；完整 Pi 生命周期仍在后续切片中。
 
 1. **状态管理**：由于有“未保存更改”的机制存在，建议引入 `Zustand` 或 `Redux` 作为单一事实来源 (Single Source of Truth)，来管理底层实际配置与前端草稿配置之间的 Diff 比对。
 2. **API 设计**：继续扩展已有业务接口：

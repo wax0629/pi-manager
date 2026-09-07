@@ -17,6 +17,10 @@ Add provider form
 Model default controls and Thinking mapping
   -> /api/route + /api/models/thinking
   -> validated candidate route + capability-checked Thinking mapping
+
+Cycle list editing
+  -> /api/models/cycle
+  -> ordered enabledModels injection with stale-ref validation
 ```
 
 The implementation uses the existing card layout from the prototype as the
@@ -46,6 +50,8 @@ new decision if the information is intentionally folded into the provider page.
   returning the key in API state.
 - Keep provider cards focused on connection resources; configure the default
   provider, model and thinking level from the model resource page.
+- Edit the Ctrl+P cycling list with ordered add/remove/reorder controls and
+  persist it as enabledModels in the generated profile.
 - Edit thinking-level mappings with Pi-level vs upstream-value vs unsupported
   states, then persist them through the manager state and profile generator.
 - Validate candidate routes against provider credentials, bridge status and
@@ -58,7 +64,6 @@ new decision if the information is intentionally folded into the provider page.
 ## Deferred
 
 - Pi-native OAuth PTY flow;
-- cycling-list ordering;
 - profile diff preview, rollback and process ownership;
 - real provider connection tests and model discovery;
 - Antigravity adapter.

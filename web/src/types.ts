@@ -67,6 +67,18 @@ export interface ManagerEvent {
   detail: string;
 }
 
+export interface CycleListEntry {
+  index: number;
+  ref: string;
+  providerId: string;
+  providerName: string;
+  providerStatus: ProviderStatus | 'missing';
+  modelId: string;
+  modelName: string;
+  valid: boolean;
+  reason: 'provider-missing' | 'model-missing' | 'provider-unready' | 'ok';
+}
+
 export interface ManagerState {
   app: {
     name: string;
@@ -74,6 +86,10 @@ export interface ManagerState {
     platform: string;
   };
   targetProject: string;
+  cycle: {
+    modelRefs: string[];
+    entries: CycleListEntry[];
+  };
   active: ActiveRoute;
   providers: ProviderState[];
   gateway: {
