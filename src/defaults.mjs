@@ -176,8 +176,11 @@ export function createDefaultState({ projectRoot }) {
       extensionPath: "",
       configRevision: 1,
       appliedRevision: 0,
+      appliedSnapshot: null,
       lastAppliedAt: null,
       lastLaunchAt: null,
+      lastLaunchPid: null,
+      lastStopAt: null,
       lastError: null,
       events: []
     }

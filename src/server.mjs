@@ -242,11 +242,13 @@ async function publicState() {
 }
 
 function applyProfile() {
+  const appliedSnapshot = store.snapshotConfiguration();
   const profile = writePiProfile({ dataDir: store.dataDir, state: store.get(), piExecutable });
   store.update((state) => {
     state.runtime.profilePath = profile.runtimeDir;
     state.runtime.extensionPath = profile.extensionPath;
     state.runtime.appliedRevision = state.runtime.configRevision;
+    state.runtime.appliedSnapshot = appliedSnapshot;
     state.runtime.lastAppliedAt = new Date().toISOString();
     state.runtime.lastError = null;
   });
@@ -283,16 +285,43 @@ async function launchPi() {
   const activeProvider = store.provider(store.get().active.providerId);
   if (activeProvider?.kind !== "native-subscription" && store.get().gateway.enabled && !gateway.isRunning()) await startGateway();
   const profile = applyProfile();
-  if (process.platform === "darwin") {
-    await new Promise((resolve, reject) => {
-      execFile("open", ["-a", "Terminal", profile.launcherPath], (error) => error ? reject(error) : resolve());
-    });
-  } else {
-    const child = await import("node:child_process").then(({ spawn }) => spawn(profile.launcherPath, [], { cwd: store.get().targetProject, detached: true, stdio: "ignore" }));
-    child.unref();
-  }
-  store.update((state) => { state.runtime.lastLaunchAt = new Date().toISOString(); });
+  const child = await import("node:child_process").then(({ spawn }) => spawn(profile.launcherPath, [], {
+    cwd: store.get().targetProject,
+    detached: true,
+    stdio: "ignore"
+  }));
+  child.unref();
+  store.update((state) => {
+    state.runtime.lastLaunchAt = new Date().toISOString();
+    state.runtime.lastLaunchPid = child.pid || null;
+    state.runtime.lastStopAt = null;
+  });
   store.recordEvent("pi", "已启动 Pi", profile.launcherPath);
+  return profile;
+}
+
+async function stopPi() {
+  const pid = store.get().runtime.lastLaunchPid;
+  if (!pid) throw new Error("没有可停止的 Pi 进程");
+  try {
+    process.kill(process.platform === "win32" ? pid : -pid, "SIGTERM");
+  } catch (error) {
+    if (!(error instanceof Error) || error.code !== "ESRCH") {
+      throw error;
+    }
+  }
+  store.update((state) => {
+    state.runtime.lastLaunchPid = null;
+    state.runtime.lastStopAt = new Date().toISOString();
+    state.runtime.lastError = null;
+  });
+  store.recordEvent("pi", "已停止 Pi", String(pid));
+}
+
+function rollbackProfile() {
+  store.restoreAppliedConfiguration();
+  const profile = applyProfile();
+  store.recordEvent("profile", "已回滚到上次成功应用的配置", profile.runtimeDir);
   return profile;
 }
 
@@ -356,6 +385,11 @@ async function handleApi(req, res, pathname) {
     sendJson(res, 200, { ok: true, profile, state: await publicState() });
     return;
   }
+  if (req.method === "POST" && pathname === "/api/profile/rollback") {
+    const profile = rollbackProfile();
+    sendJson(res, 200, { ok: true, profile, state: await publicState() });
+    return;
+  }
   if (req.method === "PATCH" && pathname === "/api/models/cycle") {
     const body = await parseBody(req);
     store.updateCycleList(body.modelRefs);
@@ -364,6 +398,11 @@ async function handleApi(req, res, pathname) {
   }
   if (req.method === "POST" && pathname === "/api/pi/launch") {
     const profile = await launchPi();
+    sendJson(res, 200, { ok: true, profile, state: await publicState() });
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/pi/stop") {
+    const profile = await stopPi();
     sendJson(res, 200, { ok: true, profile, state: await publicState() });
     return;
   }

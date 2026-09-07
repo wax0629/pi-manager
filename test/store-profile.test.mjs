@@ -166,6 +166,26 @@ test("candidate route changes remain unapplied until profile application", (t) =
   assert.equal(store.get().runtime.appliedRevision, before.runtime.appliedRevision);
 });
 
+test("rollback restores the last applied configuration snapshot", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  const appliedSnapshot = store.snapshotConfiguration();
+
+  store.update((state) => {
+    state.runtime.appliedSnapshot = appliedSnapshot;
+    state.runtime.appliedRevision = state.runtime.configRevision;
+  });
+  store.setActive({ providerId: "qiniu", modelId: "gpt-5.6-sol", thinking: "high" });
+  store.updateCycleList(["qiniu/grok-4.6"]);
+
+  const beforeRollbackRevision = store.get().runtime.configRevision;
+  store.restoreAppliedConfiguration();
+
+  assert.deepEqual(store.get().active, appliedSnapshot.active);
+  assert.deepEqual(store.get().cycle.modelRefs, appliedSnapshot.cycle.modelRefs);
+  assert.equal(store.get().runtime.configRevision, beforeRollbackRevision + 1);
+});
+
 test("cycle list updates persist and write enabledModels in order", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);

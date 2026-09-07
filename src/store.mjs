@@ -65,6 +65,16 @@ function normalizeCycleModelRefs(value) {
   return refs;
 }
 
+function captureConfigurationSnapshot(state) {
+  return clone({
+    targetProject: state.targetProject,
+    active: state.active,
+    cycle: state.cycle,
+    gateway: state.gateway,
+    providers: state.providers
+  });
+}
+
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 }
@@ -120,6 +130,7 @@ function normalizeState(defaultState, savedState) {
   };
   if (!merged.gateway.clientKey) merged.gateway.clientKey = crypto.randomBytes(24).toString("base64url");
   if (!Array.isArray(merged.runtime.events)) merged.runtime.events = [];
+  if (merged.runtime.appliedSnapshot === undefined) merged.runtime.appliedSnapshot = null;
   if (!Number.isInteger(merged.runtime.configRevision) || merged.runtime.configRevision < 1) merged.runtime.configRevision = 1;
   if (!Number.isInteger(merged.runtime.appliedRevision) || merged.runtime.appliedRevision < 0) merged.runtime.appliedRevision = 0;
   return merged;
@@ -152,6 +163,19 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
     },
     snapshot() {
       return clone(state);
+    },
+    snapshotConfiguration() {
+      return captureConfigurationSnapshot(state);
+    },
+    restoreConfiguration(snapshot) {
+      const normalized = normalizeState(defaultState, snapshot);
+      state.targetProject = normalized.targetProject;
+      state.active = normalized.active;
+      state.cycle = normalized.cycle;
+      state.gateway = normalized.gateway;
+      state.providers = normalized.providers;
+      persist();
+      return state;
     },
     save() {
       persist();
@@ -237,6 +261,17 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
       store.touchConfiguration();
       store.recordEvent("model", "已更新循环列表", nextRefs.join(" / "));
       return nextRefs;
+    },
+    restoreAppliedConfiguration() {
+      const appliedSnapshot = state.runtime.appliedSnapshot;
+      if (!appliedSnapshot || typeof appliedSnapshot !== "object") {
+        throw new Error("没有可回滚的已应用配置");
+      }
+      store.restoreConfiguration(appliedSnapshot);
+      state.runtime.configRevision += 1;
+      state.runtime.lastError = null;
+      persist();
+      return state;
     },
     addProvider({ id: requestedId, name, kind = "openai-api", baseUrl, models = [], credentialEnv = "", apiKey = "" }) {
       const normalizedName = String(name || "").trim();
