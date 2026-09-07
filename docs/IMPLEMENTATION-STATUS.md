@@ -21,6 +21,10 @@ Model default controls and Thinking mapping
 Cycle list editing
   -> /api/models/cycle
   -> ordered enabledModels injection with stale-ref validation
+
+Profile apply/launch/stop/rollback
+  -> /api/apply + /api/pi/launch + /api/pi/stop + /api/profile/rollback
+  -> isolated profile generation, launch entry, stop control and last-applied snapshot restore
 ```
 
 The implementation uses the existing card layout from the prototype as the
@@ -54,6 +58,7 @@ new decision if the information is intentionally folded into the provider page.
   persist it as enabledModels in the generated profile.
 - Edit thinking-level mappings with Pi-level vs upstream-value vs unsupported
   states, then persist them through the manager state and profile generator.
+- Apply, launch, stop and roll back the isolated profile from the Profile page.
 - Validate candidate routes against provider credentials, bridge status and
   model thinking capabilities before saving them.
 - Track a minimal candidate revision and applied revision so the UI can
@@ -64,7 +69,7 @@ new decision if the information is intentionally folded into the provider page.
 ## Deferred
 
 - Pi-native OAuth PTY flow;
-- profile diff preview, rollback and process ownership;
+- profile diff preview and process ownership;
 - real provider connection tests and model discovery;
 - Antigravity adapter.
 

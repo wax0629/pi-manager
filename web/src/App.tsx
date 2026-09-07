@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Loader2,
   Pencil,
+  Play,
   Plus,
   RefreshCw,
   Save,
@@ -19,6 +20,7 @@ import {
   Settings2,
   SlidersHorizontal,
   Trash2,
+  RotateCcw,
   X,
 } from 'lucide-react';
 import {
@@ -27,6 +29,9 @@ import {
   createProvider,
   deleteProvider,
   getState,
+  launchPi,
+  rollbackProfile,
+  stopPi,
   updateCycleList,
   routeProvider,
   updateModelThinking,
@@ -1044,21 +1049,280 @@ function CycleListEditor({
   );
 }
 
-function PlaceholderPage({ state, nav }: { state: ManagerState; nav: 'profiles' | 'diagnostics' }) {
-  if (nav === 'diagnostics') {
-    return (
-      <div className="space-y-6">
-        <div><h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">系统诊断</h1><p className="mt-1 text-[14px] text-surface-500">Pi 与 Manager 的当前运行信息。</p></div>
-        <div className="grid max-w-3xl gap-4 md:grid-cols-2">
-          <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]"><div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Activity size={15} /> Pi 环境</div><dl className="space-y-2 text-[12px]"><div className="flex justify-between gap-4"><dt className="text-surface-500">安装状态</dt><dd>{state.pi.installed ? '已安装' : '未检测到'}</dd></div><div className="flex justify-between gap-4"><dt className="text-surface-500">版本</dt><dd className="font-mono">{state.pi.version || '未检测'}</dd></div><div className="flex justify-between gap-4"><dt className="text-surface-500">可执行文件</dt><dd className="max-w-[180px] truncate font-mono" title={state.pi.path}>{state.pi.path}</dd></div></dl></div>
-          <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]"><div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Server size={15} /> Gateway</div><dl className="space-y-2 text-[12px]"><div className="flex justify-between gap-4"><dt className="text-surface-500">状态</dt><dd>{state.gateway.running ? '运行中' : '已停止'}</dd></div><div className="flex justify-between gap-4"><dt className="text-surface-500">地址</dt><dd className="font-mono">{state.gateway.host}:{state.gateway.port}</dd></div><div className="flex justify-between gap-4"><dt className="text-surface-500">请求数</dt><dd className="font-mono">{state.gateway.stats.requests}</dd></div></dl></div>
-        </div>
-        {state.runtime.lastError && <div className="flex max-w-3xl items-start rounded-md border border-red-200 bg-red-50 p-3 text-[13px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={15} className="mr-2 mt-0.5 shrink-0" />{state.runtime.lastError}</div>}
-      </div>
-    );
-  }
+function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateChanged: (nextState: ManagerState, notice: string) => void }) {
+  const [applying, setApplying] = useState(false);
+  const [launching, setLaunching] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
+  const [actionError, setActionError] = useState('');
+
+  const appliedSnapshot = state.runtime.appliedSnapshot as {
+    targetProject?: string;
+    active?: { providerId?: string; modelId?: string; thinking?: string };
+    cycle?: { modelRefs?: string[] };
+    gateway?: { enabled?: boolean; host?: string; port?: number };
+    providers?: ProviderState[];
+  } | null;
+  const currentActiveProvider = state.providers.find((provider) => provider.id === state.active.providerId);
+  const appliedActiveProvider = appliedSnapshot?.providers?.find((provider) => provider.id === appliedSnapshot.active?.providerId);
+
+  const currentRows = [
+    { label: '目标项目', value: state.targetProject },
+    { label: '默认模型', value: `${state.active.providerId}/${state.active.modelId}` },
+    { label: 'Thinking', value: state.active.thinking },
+    { label: '凭据引用', value: currentActiveProvider ? `${currentActiveProvider.name} · ${currentActiveProvider.credentialConfigured ? '已配置' : '未配置'}` : '未选择' },
+    { label: '循环列表', value: state.cycle.modelRefs.join(' / ') || '空' },
+    { label: '网关', value: `${state.gateway.host}:${state.gateway.port} · ${state.gateway.enabled ? '启用' : '关闭'}` },
+  ];
+
+  const appliedRows = [
+    { label: '目标项目', value: appliedSnapshot?.targetProject || '尚未应用' },
+    { label: '默认模型', value: appliedSnapshot?.active ? `${appliedSnapshot.active.providerId}/${appliedSnapshot.active.modelId}` : '尚未应用' },
+    { label: 'Thinking', value: appliedSnapshot?.active?.thinking || '尚未应用' },
+    { label: '凭据引用', value: appliedActiveProvider ? `${appliedActiveProvider.name} · ${appliedActiveProvider.credentialConfigured ? '已配置' : '未配置'}` : '尚未应用' },
+    { label: '循环列表', value: appliedSnapshot?.cycle?.modelRefs?.join(' / ') || '尚未应用' },
+    { label: '网关', value: appliedSnapshot?.gateway ? `${appliedSnapshot.gateway.host}:${appliedSnapshot.gateway.port} · ${appliedSnapshot.gateway.enabled ? '启用' : '关闭'}` : '尚未应用' },
+  ];
+
+  const applyNow = async () => {
+    setApplying(true);
+    setActionError('');
+    try {
+      const response = await applyProfile();
+      onStateChanged(response.state, '配置已应用到受控 Profile');
+    } catch (caughtError) {
+      setActionError(caughtError instanceof ApiError ? caughtError.message : '应用配置失败。');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const launchNow = async () => {
+    setLaunching(true);
+    setActionError('');
+    try {
+      const response = await launchPi();
+      onStateChanged(response.state, '已启动 Pi');
+    } catch (caughtError) {
+      setActionError(caughtError instanceof ApiError ? caughtError.message : '启动 Pi 失败。');
+    } finally {
+      setLaunching(false);
+    }
+  };
+
+  const stopNow = async () => {
+    setStopping(true);
+    setActionError('');
+    try {
+      const response = await stopPi();
+      onStateChanged(response.state, '已停止 Pi');
+    } catch (caughtError) {
+      setActionError(caughtError instanceof ApiError ? caughtError.message : '停止 Pi 失败。');
+    } finally {
+      setStopping(false);
+    }
+  };
+
+  const rollbackNow = async () => {
+    if (!state.runtime.appliedSnapshot) {
+      setActionError('没有可回滚的已应用配置。');
+      return;
+    }
+    setRollingBack(true);
+    setActionError('');
+    try {
+      const response = await rollbackProfile();
+      onStateChanged(response.state, '已回滚到上次成功应用的配置');
+    } catch (caughtError) {
+      setActionError(caughtError instanceof ApiError ? caughtError.message : '回滚失败。');
+    } finally {
+      setRollingBack(false);
+    }
+  };
+
   return (
-    <div className="space-y-6"><div><h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">环境 Profiles</h1><p className="mt-1 text-[14px] text-surface-500">当前受控 profile 的生成与应用状态。</p></div><div className="max-w-2xl rounded-xl border border-surface-200 bg-white p-6 dark:border-surface-800 dark:bg-[#0a0a0a]"><dl className="grid grid-cols-[120px_1fr] gap-y-3 text-[13px]"><dt className="text-surface-500">目标项目</dt><dd className="font-mono text-surface-900 dark:text-white">{state.targetProject}</dd><dt className="text-surface-500">配置 revision</dt><dd className="font-mono text-surface-900 dark:text-white">{state.configuration.revision}</dd><dt className="text-surface-500">已应用 revision</dt><dd className="font-mono text-surface-900 dark:text-white">{state.configuration.appliedRevision}</dd><dt className="text-surface-500">Profile 路径</dt><dd className="break-all font-mono text-surface-900 dark:text-white">{state.runtime.profilePath || '尚未生成'}</dd></dl></div></div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">环境 Profiles</h1>
+        <p className="mt-1 text-[14px] text-surface-500">当前受控 profile 的生成、应用、启动和回滚状态。</p>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+        <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
+          <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
+            <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">当前状态</h2>
+            <p className="mt-1 text-[12px] text-surface-500">这部分显示候选配置、已应用配置和 profile 位置。</p>
+          </div>
+          <div className="grid gap-4 p-5 md:grid-cols-2">
+            <div className="rounded-lg border border-surface-200 p-4 dark:border-surface-800">
+              <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Save size={15} /> 候选配置</div>
+              <dl className="space-y-2 text-[12px]">
+                {currentRows.map((row) => (
+                  <div key={row.label} className="flex justify-between gap-4">
+                    <dt className="text-surface-500">{row.label}</dt>
+                    <dd className="max-w-[220px] truncate font-mono text-surface-900 dark:text-white" title={row.value}>{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            <div className="rounded-lg border border-surface-200 p-4 dark:border-surface-800">
+              <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><CheckCircle2 size={15} /> 已应用配置</div>
+              <dl className="space-y-2 text-[12px]">
+                {appliedRows.map((row) => (
+                  <div key={row.label} className="flex justify-between gap-4">
+                    <dt className="text-surface-500">{row.label}</dt>
+                    <dd className="max-w-[220px] truncate font-mono text-surface-900 dark:text-white" title={row.value}>{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </div>
+          <div className="grid gap-3 border-t border-surface-100 bg-surface-50/50 px-5 py-4 dark:border-surface-800 dark:bg-surface-900/20 md:grid-cols-4">
+            <button type="button" onClick={() => void applyNow()} disabled={applying} className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-wait disabled:opacity-60">
+              {applying ? <Loader2 size={14} className="mr-2 animate-spin" /> : <CheckCircle2 size={14} className="mr-2" />}
+              应用配置
+            </button>
+            <button type="button" onClick={() => void launchNow()} disabled={launching} className="inline-flex items-center justify-center rounded-md border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-wait disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
+              {launching ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Play size={14} className="mr-2" />}
+              应用并启动
+            </button>
+            <button type="button" onClick={() => void stopNow()} disabled={stopping || !state.runtime.lastLaunchPid} className="inline-flex items-center justify-center rounded-md border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
+              {stopping ? <Loader2 size={14} className="mr-2 animate-spin" /> : <X size={14} className="mr-2" />}
+              停止 Pi
+            </button>
+            <button type="button" onClick={() => void rollbackNow()} disabled={rollingBack || !state.runtime.appliedSnapshot} className="inline-flex items-center justify-center rounded-md border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
+              {rollingBack ? <Loader2 size={14} className="mr-2 animate-spin" /> : <RotateCcw size={14} className="mr-2" />}
+              回滚到上次应用
+            </button>
+          </div>
+          {actionError && <div className="mx-5 mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{actionError}</div>}
+        </div>
+
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
+            <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
+              <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">注入预览</h2>
+              <p className="mt-1 text-[12px] text-surface-500">应用时会写入 Manager-owned 的隔离 profile。</p>
+            </div>
+            <div className="space-y-3 p-5 text-[12px]">
+              <div className="flex justify-between gap-4">
+                <span className="text-surface-500">profile 目录</span>
+                <span className="max-w-[220px] truncate font-mono text-surface-900 dark:text-white" title={state.runtime.profilePath}>{state.runtime.profilePath || '尚未生成'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-surface-500">settings.json</span>
+                <span className="max-w-[220px] truncate font-mono text-surface-900 dark:text-white">{state.runtime.profilePath ? `${state.runtime.profilePath}/.pi/settings.json` : '尚未生成'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-surface-500">extensions</span>
+                <span className="max-w-[220px] truncate font-mono text-surface-900 dark:text-white" title={state.runtime.extensionPath}>{state.runtime.extensionPath || '尚未生成'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-surface-500">应用时间</span>
+                <span className="font-mono text-surface-900 dark:text-white">{state.runtime.lastAppliedAt || '尚未应用'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-surface-500">启动时间</span>
+                <span className="font-mono text-surface-900 dark:text-white">{state.runtime.lastLaunchAt || '尚未启动'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-surface-500">启动 PID</span>
+                <span className="font-mono text-surface-900 dark:text-white">{state.runtime.lastLaunchPid ?? '无'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-surface-500">停止时间</span>
+                <span className="font-mono text-surface-900 dark:text-white">{state.runtime.lastStopAt || '尚未停止'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
+            <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
+              <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">最近状态</h2>
+              <p className="mt-1 text-[12px] text-surface-500">当前版本不会把密钥、token 或正文写入事件。</p>
+            </div>
+            <div className="space-y-3 p-5 text-[12px]">
+              <div className="flex justify-between gap-4">
+                <span className="text-surface-500">配置 revision</span>
+                <span className="font-mono text-surface-900 dark:text-white">{state.configuration.revision}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-surface-500">已应用 revision</span>
+                <span className="font-mono text-surface-900 dark:text-white">{state.configuration.appliedRevision}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-surface-500">dirty</span>
+                <span className="font-mono text-surface-900 dark:text-white">{state.configuration.dirty ? '是' : '否'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-surface-500">Pi 状态</span>
+                <span className="font-mono text-surface-900 dark:text-white">{state.pi.installed ? '已安装' : '未安装'} · {state.pi.subscriptionReady ? '订阅可用' : '未验证'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DiagnosticsPage({ state }: { state: ManagerState }) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">系统诊断</h1>
+        <p className="mt-1 text-[14px] text-surface-500">Pi 与 Manager 的当前运行信息。</p>
+      </div>
+      <div className="grid max-w-5xl gap-4 md:grid-cols-2">
+        <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
+          <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Activity size={15} /> Pi 环境</div>
+          <dl className="space-y-2 text-[12px]">
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">安装状态</dt><dd>{state.pi.installed ? '已安装' : '未检测到'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">版本</dt><dd className="font-mono">{state.pi.version || '未检测'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">可执行文件</dt><dd className="max-w-[180px] truncate font-mono" title={state.pi.path}>{state.pi.path}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">订阅授权</dt><dd>{state.pi.subscriptionReady ? '已就绪' : '未就绪'}</dd></div>
+          </dl>
+        </div>
+        <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
+          <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Server size={15} /> Gateway</div>
+          <dl className="space-y-2 text-[12px]">
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">状态</dt><dd>{state.gateway.running ? '运行中' : '已停止'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">地址</dt><dd className="font-mono">{state.gateway.host}:{state.gateway.port}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">请求数</dt><dd className="font-mono">{state.gateway.stats.requests}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">最近错误</dt><dd className="max-w-[220px] truncate text-right">{state.gateway.stats.lastError || '无'}</dd></div>
+          </dl>
+        </div>
+      </div>
+      <div className="grid max-w-5xl gap-4 md:grid-cols-2">
+        <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
+          <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><CheckCircle2 size={15} /> 配置状态</div>
+          <dl className="space-y-2 text-[12px]">
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">revision</dt><dd className="font-mono">{state.configuration.revision}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">已应用</dt><dd className="font-mono">{state.configuration.appliedRevision}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">dirty</dt><dd>{state.configuration.dirty ? '是' : '否'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">Profile</dt><dd className="max-w-[220px] truncate font-mono" title={state.runtime.profilePath}>{state.runtime.profilePath || '尚未生成'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">Pi PID</dt><dd className="font-mono">{state.runtime.lastLaunchPid ?? '无'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">停止时间</dt><dd className="font-mono">{state.runtime.lastStopAt || '尚未停止'}</dd></div>
+          </dl>
+        </div>
+        <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
+          <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Activity size={15} /> 最近事件</div>
+          <div className="space-y-3">
+            {(state.events.length > 0 ? state.events.slice(0, 6) : []).map((event) => (
+              <div key={event.id} className="rounded-md border border-surface-200 px-3 py-2 text-[12px] dark:border-surface-800">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-surface-900 dark:text-white">{event.message}</span>
+                  <span className="font-mono text-[11px] text-surface-400">{event.at.slice(11, 19)}</span>
+                </div>
+                {event.detail && <div className="mt-1 max-w-[420px] truncate text-surface-500">{event.detail}</div>}
+              </div>
+            ))}
+            {state.events.length === 0 && <div className="rounded-md border border-dashed border-surface-200 px-3 py-6 text-center text-[12px] text-surface-500 dark:border-surface-800">暂无事件。</div>}
+          </div>
+        </div>
+      </div>
+      {state.runtime.lastError && <div className="flex max-w-5xl items-start rounded-md border border-red-200 bg-red-50 p-3 text-[13px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={15} className="mr-2 mt-0.5 shrink-0" />{state.runtime.lastError}</div>}
+    </div>
   );
 }
 
@@ -1136,7 +1400,8 @@ function App() {
             {notice && <div className="mb-5 flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={14} className="mr-2" />{notice}</div>}
             {activeNav === 'providers' && <ProvidersPage state={state} onAdd={() => setShowAddModal(true)} onRefresh={() => void refreshState()} onDelete={(provider) => void handleDeleteProvider(provider)} />}
             {activeNav === 'models' && <ModelsPage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
-            {(activeNav === 'profiles' || activeNav === 'diagnostics') && <PlaceholderPage state={state} nav={activeNav} />}
+            {activeNav === 'profiles' && <ProfilePage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
+            {activeNav === 'diagnostics' && <DiagnosticsPage state={state} />}
           </div>
         </div>
       </main>

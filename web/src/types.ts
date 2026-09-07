@@ -110,8 +110,11 @@ export interface ManagerState {
     extensionPath: string;
     configRevision: number;
     appliedRevision: number;
+    appliedSnapshot: Record<string, unknown> | null;
     lastAppliedAt: string | null;
     lastLaunchAt: string | null;
+    lastLaunchPid: number | null;
+    lastStopAt: string | null;
     lastError: string | null;
     gatewayStats: GatewayStats;
     piExecutable: string;

@@ -42,14 +42,14 @@ npm run dev
 5. 点击 `保存为候选配置`。这一步只更新 Manager 的候选 revision，不会立即改变正在运行的 Pi。
 
 ### 步骤四：统一部署与模拟注入 (Deploy Flow)
-1. 新增 provider 并在模型资源库保存默认模型后，点击右上角 `部署变更`。
-2. 弹出 **配置变更预览**，显示候选 revision、默认模型和目标 profile。
-3. 点击 `应用配置`，前端调用 `POST /api/apply`。
-4. **观察点**：应用成功后返回新的 state，`appliedRevision` 与候选 revision 一致，按钮恢复不可用。
+1. 切换到 **环境 Profiles**。
+2. 在这里可以看到候选配置、已应用配置、profile 目录和注入路径。
+3. 点击 `应用配置`、`应用并启动`、`停止 Pi` 或 `回滚到上次应用`。
+4. **观察点**：应用后 `appliedRevision` 与候选 revision 一致；回滚后页面会恢复到上次成功应用的快照；启动和停止会使用当前受控 profile 的进程追踪信息。
 
 ## 4. 后续开发建议
 
-当前页面已经通过 `web/src/api.ts` 接入本地 Manager API，默认模型路由、循环列表和 thinking 映射都已可保存为候选配置；完整 Pi 生命周期仍在后续切片中。
+当前页面已经通过 `web/src/api.ts` 接入本地 Manager API，默认模型路由、循环列表、thinking 映射和 Profile 应用/回滚都已可操作；停止 Pi 和更完整的进程生命周期仍在后续切片中。
 
 1. **状态管理**：由于有“未保存更改”的机制存在，建议引入 `Zustand` 或 `Redux` 作为单一事实来源 (Single Source of Truth)，来管理底层实际配置与前端草稿配置之间的 Diff 比对。
 2. **API 设计**：继续扩展已有业务接口：

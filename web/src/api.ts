@@ -97,3 +97,21 @@ export async function applyProfile(): Promise<{ ok: true; state: ManagerState }>
     method: 'POST',
   });
 }
+
+export async function rollbackProfile(): Promise<{ ok: true; state: ManagerState }> {
+  return request<{ ok: true; state: ManagerState }>('/api/profile/rollback', {
+    method: 'POST',
+  });
+}
+
+export async function launchPi(): Promise<{ ok: true; state: ManagerState }> {
+  return request<{ ok: true; state: ManagerState }>('/api/pi/launch', {
+    method: 'POST',
+  });
+}
+
+export async function stopPi(): Promise<{ ok: true; state: ManagerState }> {
+  return request<{ ok: true; state: ManagerState }>('/api/pi/stop', {
+    method: 'POST',
+  });
+}
