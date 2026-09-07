@@ -1,0 +1,18 @@
+{
+  "name": "pi-manager",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local control plane for Pi providers, profiles, and gateway routing.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "dev": "node --watch src/server.mjs",
+    "dev:web": "npm --prefix web run dev",
+    "build:web": "npm --prefix web run build",
+    "test": "node --test",
+    "check": "node --check src/server.mjs && node --check src/store.mjs && node --check src/profile.mjs && node --check src/gateway.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
