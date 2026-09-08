@@ -23,6 +23,26 @@ function safeId(value) {
 }
 
 const customProviderKinds = new Set(["openai-api"]);
+const DEFAULT_CONTEXT_WINDOW = 128000;
+const MAX_CONTEXT_WINDOW = 100000000;
+
+function normalizeContextWindow(value, fallback = DEFAULT_CONTEXT_WINDOW) {
+  const candidate = Number(value);
+  return Number.isSafeInteger(candidate) && candidate > 0 && candidate <= MAX_CONTEXT_WINDOW
+    ? candidate
+    : fallback;
+}
+
+function assertContextWindow(value) {
+  if ((typeof value !== "number" && typeof value !== "string") || String(value).trim() === "") {
+    throw new Error("Context 长度必须是正整数");
+  }
+  const candidate = Number(value);
+  if (!Number.isSafeInteger(candidate) || candidate <= 0 || candidate > MAX_CONTEXT_WINDOW) {
+    throw new Error(`Context 长度必须是 1-${MAX_CONTEXT_WINDOW} 之间的正整数`);
+  }
+  return candidate;
+}
 
 function normalizeModel(item) {
   const source = typeof item === "string" ? { id: item, name: item } : item;
@@ -46,7 +66,7 @@ function normalizeModel(item) {
     thinkingMapSource: normalizeThinkingMapSource(source.thinkingMapSource),
     thinkingMapVerified: Boolean(source.thinkingMapVerified),
     input: Array.isArray(source.input) && source.input.length ? source.input.map((item) => String(item)) : ["text"],
-    contextWindow: Number(source.contextWindow) || 128000,
+    contextWindow: normalizeContextWindow(source.contextWindow),
     maxTokens: Number(source.maxTokens) || 32000,
     cost: source.cost || { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
   };
@@ -253,6 +273,17 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
       model.thinkingMapVerified = Boolean(verified);
       store.touchConfiguration();
       store.recordEvent("model", `已更新 ${provider.name} / ${model.name} Thinking 映射`, source);
+      return model;
+    },
+    updateModelContextWindow({ providerId, modelId, contextWindow }) {
+      const provider = store.provider(providerId);
+      if (!provider) throw new Error("渠道不存在");
+      const model = provider.models.find((item) => item.id === modelId);
+      if (!model) throw new Error("模型不存在");
+      const nextContextWindow = assertContextWindow(contextWindow);
+      model.contextWindow = nextContextWindow;
+      store.touchConfiguration();
+      store.recordEvent("model", `已更新 ${provider.name} / ${model.name} Context 长度`, String(nextContextWindow));
       return model;
     },
     updateCycleList(modelRefs) {

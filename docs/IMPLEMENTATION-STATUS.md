@@ -22,6 +22,10 @@ Cycle list editing
   -> /api/models/cycle
   -> ordered enabledModels injection with stale-ref validation
 
+Model context metadata editing
+  -> /api/models/context-window
+  -> validated contextWindow persistence and Pi models.json/extension injection
+
 Profile apply/launch/stop/rollback
   -> /api/apply + /api/pi/launch + /api/pi/stop + /api/profile/rollback
   -> isolated profile generation, launch entry, stop control and last-applied snapshot restore
@@ -62,6 +66,8 @@ new decision if the information is intentionally folded into the provider page.
   provider, model and thinking level from the model resource page.
 - Edit the Ctrl+P cycling list with ordered add/remove/reorder controls and
   persist it as enabledModels in the generated profile.
+- Edit each complete-catalog model's context window and inject the value into
+  the generated Pi model definition.
 - Edit thinking-level mappings with Pi-level vs upstream-value vs unsupported
   states, then persist them through the manager state and profile generator.
 - Apply, launch, stop and roll back the isolated profile from the Profile page.

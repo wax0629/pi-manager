@@ -378,6 +378,12 @@ async function handleApi(req, res, pathname) {
     sendJson(res, 200, { ok: true, state: await publicState() });
     return;
   }
+  if (req.method === "PATCH" && pathname === "/api/models/context-window") {
+    const body = await parseBody(req);
+    store.updateModelContextWindow(body);
+    sendJson(res, 200, { ok: true, state: await publicState() });
+    return;
+  }
   if (req.method === "POST" && pathname === "/api/apply") {
     await ensureCycleListReady();
     const provider = store.provider(store.get().active.providerId);
