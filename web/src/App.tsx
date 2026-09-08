@@ -34,6 +34,7 @@ import {
   testProviderConnection,
   stopPi,
   updateCycleList,
+  updateModelContextWindow,
   routeProvider,
   updateModelThinking,
 } from './api';
@@ -710,10 +711,10 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
               <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索模型 ID" aria-label="搜索模型 ID" className="w-full rounded-md border border-surface-200 bg-white py-1.5 pl-8 pr-3 text-[13px] outline-none focus:border-surface-400 dark:border-surface-700 dark:bg-[#0a0a0a] dark:text-white" />
             </div>
-            <span className="text-[12px] text-surface-500">目录来源只读；模型策略可单独调整</span>
+            <span className="text-[12px] text-surface-500">模型元数据和策略可单独调整</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[880px] text-left text-[13px]">
+            <table className="w-full min-w-[980px] text-left text-[13px]">
               <thead className="bg-surface-50/80 text-[12px] font-medium text-surface-500 dark:bg-surface-900/50 dark:text-surface-400">
                 <tr>
                   <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">模型</th>
@@ -732,7 +733,7 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
                     <td className="px-4 py-3">{provider.name}</td>
                     <td className="px-4 py-3 text-[12px] text-surface-500">{model.input.join(', ')}</td>
                     <td className="px-4 py-3 text-[12px] text-surface-500">{thinkingSummary(model)}</td>
-                    <td className="px-4 py-3 font-mono text-[12px] text-surface-500">{Math.round(model.contextWindow / 1000)}K</td>
+                    <td className="px-4 py-3"><ModelContextWindowEditor key={`${provider.id}/${model.id}:${model.contextWindow}`} provider={provider} model={model} onStateChanged={onStateChanged} /></td>
                     <td className="px-4 py-3">{provider.id === state.active.providerId && model.id === state.active.modelId ? <span className="text-primary-600 dark:text-primary-400">默认</span> : provider.status === 'ready' ? <span className="text-surface-400">可用</span> : <span className="text-amber-600 dark:text-amber-400">{statusMeta(provider.status).label}</span>}</td>
                     <td className="px-4 py-3"><button type="button" onClick={() => { setMappingRef(`${provider.id}/${model.id}`); setActiveTab('thinking'); }} title={`编辑 ${model.name} 的 Thinking 映射`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium text-surface-600 transition-colors hover:bg-surface-100 hover:text-surface-950 dark:text-surface-400 dark:hover:bg-surface-800 dark:hover:text-white"><Pencil size={13} />映射</button></td>
                   </tr>
@@ -818,6 +819,62 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
           ) : <div className="rounded-xl border border-dashed border-surface-300 p-8 text-center text-[13px] text-surface-500 dark:border-surface-800">暂无可编辑的模型。</div>}
         </div>
       )}
+    </div>
+  );
+}
+
+function ModelContextWindowEditor({
+  provider,
+  model,
+  onStateChanged,
+}: {
+  provider: ProviderState;
+  model: ModelDefinition;
+  onStateChanged: (nextState: ManagerState, notice: string) => void;
+}) {
+  const [draft, setDraft] = useState(String(model.contextWindow));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const changed = draft !== String(model.contextWindow);
+
+  const save = async () => {
+    if (!/^\d+$/.test(draft) || Number(draft) < 1 || Number(draft) > 100000000) {
+      setError('请输入 1-100000000 之间的正整数。');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const response = await updateModelContextWindow({
+        providerId: provider.id,
+        modelId: model.id,
+        contextWindow: Number(draft),
+      });
+      onStateChanged(response.state, `${model.name} 的 Context 长度已保存为候选配置`);
+    } catch (caughtError) {
+      setError(caughtError instanceof ApiError ? caughtError.message : '保存 Context 长度失败。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="min-w-[190px]">
+      <div className="flex items-center gap-1.5">
+        <input
+          type="number"
+          min="1"
+          max="100000000"
+          step="1"
+          value={draft}
+          onChange={(event) => { setDraft(event.target.value); setError(''); }}
+          aria-label={`${model.name} Context 长度`}
+          className="w-[118px] rounded-md border border-surface-200 bg-white px-2 py-1.5 font-mono text-[12px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white"
+        />
+        <span className="text-[11px] text-surface-400">tokens</span>
+        {changed && <button type="button" onClick={() => void save()} disabled={saving} title="保存 Context 长度" aria-label="保存 Context 长度" className="inline-flex h-7 w-7 items-center justify-center rounded-md text-primary-600 hover:bg-primary-50 disabled:cursor-wait disabled:opacity-50 dark:text-primary-400 dark:hover:bg-primary-500/10"><Save size={13} /></button>}
+      </div>
+      {error && <div className="mt-1 max-w-[190px] text-[10px] leading-4 text-red-600 dark:text-red-400">{error}</div>}
     </div>
   );
 }

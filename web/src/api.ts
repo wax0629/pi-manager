@@ -90,6 +90,17 @@ export async function updateModelThinking(input: {
   });
 }
 
+export async function updateModelContextWindow(input: {
+  providerId: string;
+  modelId: string;
+  contextWindow: number;
+}): Promise<{ ok: true; state: ManagerState }> {
+  return request<{ ok: true; state: ManagerState }>('/api/models/context-window', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
 export async function updateCycleList(input: {
   modelRefs: string[];
 }): Promise<{ ok: true; state: ManagerState }> {

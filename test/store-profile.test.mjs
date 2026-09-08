@@ -154,6 +154,28 @@ test("thinking map cannot invalidate the active default route", (t) => {
   );
 });
 
+test("context window updates persist and reject invalid values", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+
+  store.updateModelContextWindow({
+    providerId: "qiniu",
+    modelId: "gpt-5.6-luna",
+    contextWindow: 640000
+  });
+
+  assert.equal(store.provider("qiniu").models.find((model) => model.id === "gpt-5.6-luna").contextWindow, 640000);
+  const reloaded = createStore(fixture);
+  assert.equal(reloaded.provider("qiniu").models.find((model) => model.id === "gpt-5.6-luna").contextWindow, 640000);
+
+  for (const value of [0, -1, 1.5, "", "1.5", 100000001]) {
+    assert.throws(
+      () => reloaded.updateModelContextWindow({ providerId: "qiniu", modelId: "gpt-5.6-luna", contextWindow: value }),
+      /Context 长度/
+    );
+  }
+});
+
 test("candidate route changes remain unapplied until profile application", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
@@ -258,4 +280,23 @@ test("native profiles write model thinking overrides to models.json", (t) => {
 
   assert.equal(models.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].thinkingLevelMap.max, "max");
   assert.equal(models.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].thinkingLevelMap.xhigh, "xhigh");
+  assert.equal(models.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].contextWindow, 1050000);
+});
+
+test("profile injects an edited context window for custom providers", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  const provider = store.addProvider({
+    id: "demo-relay",
+    name: "Demo Relay",
+    baseUrl: "https://relay.example.test/v1",
+    models: [{ id: "demo-model", contextWindow: 128000 }],
+    apiKey: "test-secret-value"
+  });
+  store.setActive({ providerId: provider.id, modelId: "demo-model", thinking: "off" });
+  store.updateModelContextWindow({ providerId: provider.id, modelId: "demo-model", contextWindow: 256000 });
+
+  const profile = writePiProfile({ dataDir: fixture.dataDir, state: store.get(), piExecutable: "/usr/bin/pi" });
+  const extension = fs.readFileSync(profile.extensionPath, "utf8");
+  assert.match(extension, /"contextWindow": 256000/);
 });

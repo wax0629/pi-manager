@@ -125,9 +125,12 @@ export function writePiProfile({ dataDir, state, piExecutable = "pi" }) {
       }
     }
     const modelOverrides = Object.fromEntries(
-      provider.models
-        .filter((item) => item.reasoning && item.thinkingLevelMap && Object.keys(item.thinkingLevelMap).length > 0)
-        .map((item) => [item.id, { thinkingLevelMap: item.thinkingLevelMap }])
+      provider.models.map((item) => [item.id, {
+        contextWindow: item.contextWindow,
+        ...(item.reasoning && item.thinkingLevelMap && Object.keys(item.thinkingLevelMap).length > 0
+          ? { thinkingLevelMap: item.thinkingLevelMap }
+          : {})
+      }])
     );
     if (Object.keys(modelOverrides).length > 0) {
       writeJsonAtomic(modelsPath, {
