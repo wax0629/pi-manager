@@ -511,29 +511,11 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
     sendJson(res, 201, { ok: true, provider, state: await publicState() });
     return;
   }
-  if (req.method === "PATCH" && pathname.startsWith("/api/providers/")) {
+  if (req.method === "PATCH" && pathname.startsWith("/api/providers/") && !pathname.endsWith("/credential") && !pathname.endsWith("/test")) {
     const providerId = pathname.split("/")[3];
-    const provider = store.provider(providerId);
-    if (!provider) throw new Error("渠道不存在");
     const body = await parseBody(req);
-    store.update((state) => {
-      const current = state.providers.find((item) => item.id === providerId);
-      if (body.name) current.name = String(body.name).trim();
-      if (body.baseUrl) {
-        let parsed;
-        try {
-          parsed = new URL(String(body.baseUrl).trim());
-        } catch {
-          throw new Error("Base URL 必须是有效的 http(s) 地址");
-        }
-        if (!/^https?:$/i.test(parsed.protocol)) throw new Error("Base URL 必须是有效的 http(s) 地址");
-        current.baseUrl = parsed.toString().replace(/\/$/, "");
-      }
-      if (Array.isArray(body.models) && body.models.length) current.models = body.models;
-    });
-    store.touchConfiguration();
-    store.recordEvent("provider", `已更新渠道 ${provider.name}`, providerId);
-    sendJson(res, 200, { ok: true, state: await publicState() });
+    const provider = store.updateProvider(providerId, body);
+    sendJson(res, 200, { ok: true, provider, state: await publicState() });
     return;
   }
   if (req.method === "DELETE" && pathname.startsWith("/api/providers/") && !pathname.endsWith("/credential")) {

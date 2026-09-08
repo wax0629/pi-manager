@@ -4,6 +4,7 @@ import type {
   ManagerState,
   ProviderConnectionTestResult,
   StateResponse,
+  UpdateProviderInput,
 } from './types';
 
 export class ApiError extends Error {
@@ -50,6 +51,13 @@ export async function getState(forceRefresh = false): Promise<ManagerState> {
 export async function createProvider(input: CreateProviderInput): Promise<CreateProviderResponse> {
   return request<CreateProviderResponse>('/api/providers', {
     method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateProvider(providerId: string, input: UpdateProviderInput): Promise<CreateProviderResponse> {
+  return request<CreateProviderResponse>(`/api/providers/${encodeURIComponent(providerId)}`, {
+    method: 'PATCH',
     body: JSON.stringify(input),
   });
 }

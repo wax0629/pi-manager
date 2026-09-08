@@ -156,6 +156,14 @@ export interface CreateProviderInput {
   apiKey?: string;
 }
 
+export interface UpdateProviderInput {
+  id?: string;
+  name?: string;
+  baseUrl?: string;
+  models?: string[];
+  apiKey?: string;
+}
+
 export interface StateResponse {
   state: ManagerState;
 }
