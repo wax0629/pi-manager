@@ -1295,7 +1295,7 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-surface-500">settings.json</span>
-                <span className="max-w-[220px] truncate font-mono text-surface-900 dark:text-white">{state.runtime.profilePath ? `${state.runtime.profilePath}/.pi/settings.json` : '尚未生成'}</span>
+                <span className="max-w-[220px] truncate font-mono text-surface-900 dark:text-white">{state.runtime.profilePath ? `${state.runtime.profilePath}/settings.json` : '尚未生成'}</span>
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-surface-500">extensions</span>
