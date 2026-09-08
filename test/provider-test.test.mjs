@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyConnectionError, CONNECTION_TEST_CATEGORIES, testProviderConnection } from "../src/provider-test.mjs";
+import { classifyConnectionError, CONNECTION_TEST_CATEGORIES, sanitizeConnectionTestUrl, testProviderConnection } from "../src/provider-test.mjs";
 
 test("connection error classification maps dns and tls failures", () => {
   const dns = classifyConnectionError(Object.assign(new Error("getaddrinfo ENOTFOUND api.example.test"), { code: "ENOTFOUND" }));
@@ -10,12 +10,17 @@ test("connection error classification maps dns and tls failures", () => {
   assert.equal(tls.category, CONNECTION_TEST_CATEGORIES.TLS);
 });
 
+test("connection test sanitizes diagnostic URLs", () => {
+  const sanitized = sanitizeConnectionTestUrl("https://user:pass@relay.example.test/v1/models?token=secret#frag");
+  assert.equal(sanitized, "https://relay.example.test/v1/models");
+});
+
 test("connection test reports auth and timeout categories", async () => {
   const provider = {
     id: "demo",
     name: "Demo",
     kind: "openai-api",
-    baseUrl: "https://relay.example.test/v1"
+    baseUrl: "https://user:pass@relay.example.test/v1"
   };
   const auth = await testProviderConnection({
     provider,
@@ -32,6 +37,7 @@ test("connection test reports auth and timeout categories", async () => {
 
   assert.equal(auth.ok, false);
   assert.equal(auth.category, CONNECTION_TEST_CATEGORIES.AUTH);
+  assert.equal(auth.detail, "https://relay.example.test/v1/models · HTTP 401");
   assert.equal(timeout.ok, false);
   assert.equal(timeout.category, CONNECTION_TEST_CATEGORIES.TIMEOUT);
 });
