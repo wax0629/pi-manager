@@ -43,6 +43,35 @@ test("custom provider metadata and credential survive reload without leaking int
   assert.equal(reloaded.credential(reloaded.provider("demo-relay")), "test-secret-value");
 });
 
+test("new stores initialize and preserve a local gateway client key", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  const firstKey = store.get().gateway.clientKey;
+
+  assert.equal(typeof firstKey, "string");
+  assert.equal(firstKey.length >= 32, true);
+  assert.equal(JSON.parse(fs.readFileSync(store.statePath, "utf8")).gateway.clientKey, firstKey);
+
+  const reloaded = createStore(fixture);
+  assert.equal(reloaded.get().gateway.clientKey, firstKey);
+});
+
+test("stores repair a legacy empty gateway client key without changing other config", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  const before = store.snapshotConfiguration();
+  const persisted = JSON.parse(fs.readFileSync(store.statePath, "utf8"));
+  persisted.gateway.clientKey = "";
+  fs.writeFileSync(store.statePath, `${JSON.stringify(persisted)}\n`);
+
+  const repaired = createStore(fixture);
+  assert.equal(repaired.get().gateway.clientKey.length >= 32, true);
+  assert.notEqual(repaired.get().gateway.clientKey, "");
+  assert.equal(JSON.parse(fs.readFileSync(repaired.statePath, "utf8")).gateway.clientKey, repaired.get().gateway.clientKey);
+  assert.deepEqual(repaired.get().active, before.active);
+  assert.deepEqual(repaired.get().cycle, before.cycle);
+});
+
 test("custom provider validation rejects unsupported URLs and empty model lists", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
@@ -94,6 +123,7 @@ test("profile generation writes an isolated custom provider extension without th
   assert.equal(extension.includes("test-secret-value"), false);
   assert.equal(extension.includes("https://relay.example.test"), false);
   assert.equal(extension.includes("http://127.0.0.1:8675/v1"), true);
+  assert.equal(launcher.includes(`export PI_MANAGER_GATEWAY_KEY='${store.get().gateway.clientKey}'`), true);
   assert.equal(launcher.includes("PI_CODING_AGENT_DIR"), true);
   assert.equal(launcher.includes("--provider"), true);
   assert.equal(launcher.includes("'demo-model'"), true);
