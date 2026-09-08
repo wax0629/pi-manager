@@ -29,6 +29,19 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+export function sanitizeConnectionTestUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return String(value || "");
+  }
+}
+
 function normalizeResult({ provider, ok, category, message, detail, status, testedAt, durationMs }) {
   return {
     providerId: provider.id,
@@ -115,6 +128,7 @@ export async function testProviderConnection({ provider, credential, detectPi, f
   const headers = { accept: "application/json" };
   if (credential) headers.authorization = `Bearer ${credential}`;
   const testUrl = upstreamUrl(provider.baseUrl, "models");
+  const safeTestUrl = sanitizeConnectionTestUrl(testUrl);
 
   let response;
   try {
@@ -130,7 +144,7 @@ export async function testProviderConnection({ provider, credential, detectPi, f
       ok: false,
       category: failed.category,
       message: failed.message,
-      detail: testUrl,
+      detail: safeTestUrl,
       status: 0,
       testedAt,
       durationMs: Date.now() - startedAt
@@ -143,7 +157,7 @@ export async function testProviderConnection({ provider, credential, detectPi, f
       ok: true,
       category: CONNECTION_TEST_CATEGORIES.SUCCESS,
       message: "连接测试通过",
-      detail: testUrl,
+      detail: safeTestUrl,
       status: response.status,
       testedAt,
       durationMs: Date.now() - startedAt
@@ -156,7 +170,7 @@ export async function testProviderConnection({ provider, credential, detectPi, f
     ok: false,
     category: failed.category,
     message: failed.message,
-    detail: `${testUrl} · HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`,
+    detail: `${safeTestUrl} · HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`,
     status: response.status,
     testedAt,
     durationMs: Date.now() - startedAt
