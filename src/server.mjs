@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createGateway } from "./gateway.mjs";
 import { createPiAuthProbe } from "./pi-auth.mjs";
+import { readPiModelsConfig, resolvePiAgentDir } from "./pi-import.mjs";
 import { sanitizeConnectionTestUrl, testProviderConnection } from "./provider-test.mjs";
 import { writePiProfile } from "./profile.mjs";
 import { createStore } from "./store.mjs";
@@ -503,6 +504,21 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
     const providerId = pathname.split("/")[3];
     store.deleteCredential(providerId);
     sendJson(res, 200, { ok: true, state: await publicState() });
+    return;
+  }
+  if (req.method === "GET" && pathname === "/api/pi/import") {
+    const modelsConfig = readPiModelsConfig(resolvePiAgentDir());
+    sendJson(res, 200, { ok: true, preview: store.previewPiImport(modelsConfig) });
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/pi/import") {
+    const body = await parseBody(req);
+    const modelsConfig = readPiModelsConfig(resolvePiAgentDir());
+    const result = store.importPiProviders({
+      modelsConfig,
+      overwrite: Boolean(body.overwrite)
+    });
+    sendJson(res, 200, { ok: true, result, state: await publicState() });
     return;
   }
   if (req.method === "POST" && pathname === "/api/providers") {

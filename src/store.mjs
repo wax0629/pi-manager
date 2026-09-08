@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { clone, createDefaultState } from "./defaults.mjs";
+import { previewPiProviderImport, summarizePiProvider, literalApiKeyFromPiProvider } from "./pi-import.mjs";
 import { deleteSecret, getSecret, hasSecret, setSecret } from "./secrets.mjs";
 import {
   THINKING_MAP_SOURCES,
@@ -465,6 +466,62 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
       );
       store.touchConfiguration();
       store.recordEvent("provider", `已删除渠道 ${removed.name}`, providerId);
+    },
+    previewPiImport(modelsConfig) {
+      return previewPiProviderImport({
+        modelsConfig,
+        existingProviders: state.providers
+      });
+    },
+    importPiProviders({ modelsConfig, overwrite = false } = {}) {
+      const preview = store.previewPiImport(modelsConfig);
+      if (!overwrite && preview.conflicts.length > 0) {
+        const ids = preview.conflicts.map((item) => item.id).join(", ");
+        throw new Error(`以下渠道已存在，需确认后才能覆盖: ${ids}`);
+      }
+      const imported = [];
+      const skipped = [...preview.skipped];
+      for (const candidate of preview.candidates) {
+        const source = modelsConfig?.providers?.[candidate.id];
+        if (!source) continue;
+        const summary = summarizePiProvider(candidate.id, source);
+        const models = mergeProviderModels(summary.models, store.provider(candidate.id)?.models || []);
+        if (!models.length) {
+          skipped.push({ id: candidate.id, reason: "missing-models-or-baseurl" });
+          continue;
+        }
+        const existing = store.provider(candidate.id);
+        if (existing) {
+          if (existing.kind === "native-subscription") {
+            skipped.push({ id: candidate.id, reason: "native-subscription" });
+            continue;
+          }
+          existing.name = summary.name;
+          existing.kind = existing.id === "antigravity" ? "local-bridge" : "openai-api";
+          existing.baseUrl = summary.baseUrl;
+          existing.credentialEnv = summary.credentialEnv || existing.credentialEnv || "";
+          existing.description = existing.description || "从本机 Pi models.json 导入";
+          existing.models = models;
+        } else {
+          state.providers.push({
+            id: summary.id,
+            name: summary.name,
+            kind: summary.id === "antigravity" ? "local-bridge" : "openai-api",
+            baseUrl: summary.baseUrl,
+            credentialEnv: summary.credentialEnv,
+            description: "从本机 Pi models.json 导入",
+            models
+          });
+        }
+        const literalKey = literalApiKeyFromPiProvider(source);
+        if (literalKey) setSecret({ dataDir, providerId: summary.id, value: literalKey });
+        imported.push(summary.id);
+      }
+      if (imported.length > 0) {
+        store.touchConfiguration();
+        store.recordEvent("provider", `已从本机 Pi 导入 ${imported.length} 个渠道`, imported.join(", "));
+      }
+      return { imported, skipped, conflicts: preview.conflicts, modelsPath: preview.modelsPath };
     }
   };
 

@@ -2,6 +2,8 @@ import type {
   CreateProviderInput,
   CreateProviderResponse,
   ManagerState,
+  PiImportPreview,
+  PiImportResult,
   ProviderConnectionTestResult,
   StateResponse,
   UpdateProviderInput,
@@ -46,6 +48,17 @@ async function request<T>(pathname: string, init?: RequestInit): Promise<T> {
 export async function getState(forceRefresh = false): Promise<ManagerState> {
   const payload = await request<ManagerState>(forceRefresh ? '/api/state?refresh=1' : '/api/state');
   return payload;
+}
+
+export async function previewPiImport(): Promise<{ ok: true; preview: PiImportPreview }> {
+  return request<{ ok: true; preview: PiImportPreview }>('/api/pi/import');
+}
+
+export async function importPiProviders(overwrite = false): Promise<{ ok: true; result: PiImportResult; state: ManagerState }> {
+  return request<{ ok: true; result: PiImportResult; state: ManagerState }>('/api/pi/import', {
+    method: 'POST',
+    body: JSON.stringify({ overwrite }),
+  });
 }
 
 export async function createProvider(input: CreateProviderInput): Promise<CreateProviderResponse> {

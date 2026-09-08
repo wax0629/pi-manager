@@ -67,6 +67,8 @@ new decision if the information is intentionally folded into the provider page.
 - Show loading and recoverable error states in the web UI.
 - Search provider cards and refresh the state from the backend.
 - Add a custom OpenAI-compatible provider with one or more model IDs.
+- Import existing OpenAI-compatible providers from the local Pi `models.json`
+  without modifying the source file or writing plaintext keys into state.json.
 - Edit an existing custom provider's name, provider ID, base URL, model list
   and optional API key, while preserving remaining model metadata.
 - Save an optional API key through the existing credential abstraction without

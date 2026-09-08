@@ -172,3 +172,31 @@ export interface CreateProviderResponse extends StateResponse {
   ok: true;
   provider: Omit<ProviderState, 'credentialConfigured' | 'status' | 'detail'>;
 }
+
+export interface PiImportCandidate {
+  id: string;
+  name: string;
+  baseUrl: string;
+  api: string;
+  models: Array<{ id: string; name: string }>;
+  credentialEnv: string;
+  credentialKind: 'missing' | 'env' | 'literal' | 'command';
+  credentialConfigured: boolean;
+  conflict: boolean;
+  existingKind: string;
+  existingName: string;
+}
+
+export interface PiImportPreview {
+  modelsPath: string;
+  candidates: PiImportCandidate[];
+  skipped: Array<{ id: string; reason: string }>;
+  conflicts: PiImportCandidate[];
+}
+
+export interface PiImportResult {
+  imported: string[];
+  skipped: Array<{ id: string; reason: string }>;
+  conflicts: PiImportCandidate[];
+  modelsPath: string;
+}
