@@ -71,6 +71,8 @@ new decision if the information is intentionally folded into the provider page.
   and optional API key, while preserving remaining model metadata.
 - Save an optional API key through the existing credential abstraction without
   returning the key in API state.
+- Configure or clear API keys for existing OpenAI-compatible and local-bridge
+  providers from the provider cards. Native subscription providers stay on Pi login.
 - Test provider connectivity from the provider cards with categorized failure
   messages.
 - Detect each native provider's Pi authentication state independently and

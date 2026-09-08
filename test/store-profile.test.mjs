@@ -72,6 +72,51 @@ test("stores repair a legacy empty gateway client key without changing other con
   assert.deepEqual(repaired.get().cycle, before.cycle);
 });
 
+test("API and bridge credentials can be saved and cleared without leaking into state.json", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+
+  store.setCredential("qiniu", "qiniu-ui-secret");
+  store.setCredential("antigravity", "bridge-ui-secret");
+  assert.equal(store.credential(store.provider("qiniu")), "qiniu-ui-secret");
+  assert.equal(store.credential(store.provider("antigravity")), "bridge-ui-secret");
+  assert.equal(store.credentialConfigured(store.provider("qiniu")), true);
+  assert.equal(fs.readFileSync(store.statePath, "utf8").includes("qiniu-ui-secret"), false);
+  assert.equal(fs.readFileSync(store.statePath, "utf8").includes("bridge-ui-secret"), false);
+
+  store.deleteCredential("antigravity");
+  assert.equal(store.credential(store.provider("antigravity")), "");
+  assert.equal(store.credentialConfigured(store.provider("antigravity")), false);
+
+  assert.throws(() => store.setCredential("openai-codex", "should-fail"), /原生订阅/);
+  assert.throws(() => store.deleteCredential("openai-codex"), /原生订阅/);
+  assert.throws(() => store.setCredential("qiniu", "   "), /凭据不能为空/);
+});
+
+test("manager-stored antigravity credentials take precedence over bridge env files", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  const bridgePath = path.join(fixture.projectRoot, "antigravity-bridge");
+  fs.mkdirSync(bridgePath, { recursive: true });
+  fs.writeFileSync(path.join(bridgePath, ".env"), "API_KEY=from-bridge\n");
+  store.update((state) => {
+    const provider = state.providers.find((item) => item.id === "antigravity");
+    if (provider) provider.bridgePath = bridgePath;
+  });
+
+  const provider = store.provider("antigravity");
+  assert.equal(store.credential(provider), "from-bridge");
+  assert.equal(store.credentialConfigured(provider), true);
+
+  store.setCredential("antigravity", "from-manager");
+  assert.equal(store.credential(store.provider("antigravity")), "from-manager");
+  assert.equal(store.credentialConfigured(store.provider("antigravity")), true);
+
+  store.deleteCredential("antigravity");
+  assert.equal(store.credential(store.provider("antigravity")), "from-bridge");
+  assert.equal(store.credentialConfigured(store.provider("antigravity")), true);
+});
+
 test("custom provider validation rejects unsupported URLs and empty model lists", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);

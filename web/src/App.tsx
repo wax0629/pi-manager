@@ -28,7 +28,9 @@ import {
   applyProfile,
   createProvider,
   deleteProvider,
+  deleteProviderCredential,
   getState,
+  setProviderCredential,
   launchPi,
   rollbackProfile,
   testProviderConnection,
@@ -57,6 +59,10 @@ const BUILTIN_PROVIDER_IDS = ['qiniu', 'antigravity', 'openai-codex'] as const;
 
 function isCustomApiProvider(provider: ProviderState) {
   return provider.kind === 'openai-api' && !BUILTIN_PROVIDER_IDS.includes(provider.id as typeof BUILTIN_PROVIDER_IDS[number]);
+}
+
+function canConfigureCredential(provider: ProviderState) {
+  return provider.kind !== 'native-subscription';
 }
 
 function projectName(projectPath: string) {
@@ -258,11 +264,12 @@ function Topbar({ state, onDeploy, onRefresh, refreshing }: { state: ManagerStat
   );
 }
 
-function ProviderCard({ provider, testResult, onTest, onRefresh, onEdit, onDelete }: {
+function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, onEdit, onDelete }: {
   provider: ProviderState;
   testResult?: ProviderConnectionTestResult;
   onTest: () => void;
   onRefresh: () => void;
+  onCredential?: () => void;
   onEdit?: () => void;
   onDelete: () => void;
 }) {
@@ -270,6 +277,7 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onEdit, onDelet
   const isNative = provider.kind === 'native-subscription';
   const canEdit = isCustomApiProvider(provider);
   const canDelete = canEdit;
+  const canCredential = canConfigureCredential(provider);
 
   return (
     <article className="group flex min-h-[286px] flex-col overflow-hidden rounded-xl border border-surface-200 bg-white transition-all hover:border-surface-400 hover:shadow-vercel dark:border-surface-800 dark:bg-[#0a0a0a] dark:hover:border-surface-600 dark:hover:shadow-linear">
@@ -351,6 +359,17 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onEdit, onDelet
           >
             <RefreshCw size={14} />
           </button>
+          {canCredential && onCredential && (
+            <button
+              type="button"
+              onClick={onCredential}
+              title="配置 API Key"
+              aria-label={`配置 ${provider.name} API Key`}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-white"
+            >
+              <KeyRound size={14} />
+            </button>
+          )}
           {canEdit && onEdit && (
             <button
               type="button"
@@ -379,12 +398,13 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onEdit, onDelet
   );
 }
 
-function ProvidersPage({ state, testResults, onAdd, onRefresh, onTest, onEdit, onDelete }: {
+function ProvidersPage({ state, testResults, onAdd, onRefresh, onTest, onCredential, onEdit, onDelete }: {
   state: ManagerState;
   testResults: Record<string, ProviderConnectionTestResult>;
   onAdd: () => void;
   onRefresh: () => void;
   onTest: (provider: ProviderState) => void;
+  onCredential: (provider: ProviderState) => void;
   onEdit: (provider: ProviderState) => void;
   onDelete: (provider: ProviderState) => void;
 }) {
@@ -462,6 +482,7 @@ function ProvidersPage({ state, testResults, onAdd, onRefresh, onTest, onEdit, o
               testResult={testResults[provider.id]}
               onTest={() => onTest(provider)}
               onRefresh={onRefresh}
+              onCredential={() => onCredential(provider)}
               onEdit={() => onEdit(provider)}
               onDelete={() => onDelete(provider)}
             />
@@ -580,6 +601,92 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
               {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
               保存为候选配置
             </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function CredentialModal({ provider, isOpen, onClose, onSaved }: {
+  provider?: ProviderState | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onSaved: (state: ManagerState, notice: string) => void;
+}) {
+  const [apiKey, setApiKey] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  if (!isOpen || !provider) return null;
+
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!apiKey.trim()) {
+      setError('API Key 不能为空。');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      const response = await setProviderCredential(provider.id, apiKey.trim());
+      onSaved(response.state, `${provider.name} 凭据已保存`);
+      onClose();
+    } catch (caughtError) {
+      setError(caughtError instanceof ApiError ? caughtError.message : '保存凭据失败。');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const clear = async () => {
+    setSubmitting(true);
+    setError('');
+    try {
+      const response = await deleteProviderCredential(provider.id);
+      onSaved(response.state, `${provider.name} 凭据已清除`);
+      onClose();
+    } catch (caughtError) {
+      setError(caughtError instanceof ApiError ? caughtError.message : '清除凭据失败。');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm dark:bg-black/60" role="presentation">
+      <div className="w-full max-w-md overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="credential-title">
+        <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
+          <div>
+            <h2 id="credential-title" className="text-[16px] font-bold text-surface-900 dark:text-white">配置 API Key</h2>
+            <p className="mt-1 text-[12px] text-surface-500">{provider.name} · {provider.id}</p>
+          </div>
+          <button type="button" onClick={onClose} disabled={submitting} title="关闭" aria-label="关闭" className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
+        </div>
+        <form onSubmit={save}>
+          <div className="space-y-4 p-6">
+            <div className="rounded-md bg-surface-50 px-3 py-2 text-[12px] text-surface-500 dark:bg-surface-900/50">
+              {provider.credentialConfigured ? '当前已配置 API Key，保存新值会覆盖 Manager 中的密钥。' : '当前尚未配置 API Key。'}
+              {provider.id === 'antigravity' ? ' Antigravity 按本地 OpenAI 兼容桥接入，不在此登录其订阅。' : ''}
+            </div>
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">API Key</span>
+              <div className="relative">
+                <KeyRound size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
+                <input value={apiKey} onChange={(event) => { setApiKey(event.target.value); setError(''); }} type="password" autoComplete="new-password" autoFocus placeholder="不会在界面回显已有密钥" className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+              </div>
+            </label>
+            {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-surface-100 bg-surface-50 p-5 dark:border-surface-800 dark:bg-surface-900/50">
+            <button type="button" onClick={() => void clear()} disabled={submitting || !provider.credentialConfigured} className="rounded-md px-4 py-2 text-[13px] font-medium text-red-600 transition-colors hover:text-red-700 disabled:opacity-40 dark:text-red-400">清除凭据</button>
+            <div className="flex gap-3">
+              <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 transition-colors hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">取消</button>
+              <button type="submit" disabled={submitting} className="flex items-center rounded-md bg-surface-950 px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-surface-800 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-surface-950 dark:hover:bg-surface-200">
+                {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
+                保存凭据
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -1458,6 +1565,7 @@ function App() {
   const [notice, setNotice] = useState('');
   const [connectionTests, setConnectionTests] = useState<Record<string, ProviderConnectionTestResult>>({});
   const [editingProvider, setEditingProvider] = useState<ProviderState | null | undefined>(undefined);
+  const [credentialProvider, setCredentialProvider] = useState<ProviderState | null>(null);
   const [showDeployModal, setShowDeployModal] = useState(false);
 
   useEffect(() => {
@@ -1538,7 +1646,7 @@ function App() {
           <div className="mx-auto max-w-[1200px] pb-20">
             {error && <div className="mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
             {notice && <div className="mb-5 flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={14} className="mr-2" />{notice}</div>}
-            {activeNav === 'providers' && <ProvidersPage state={state} testResults={connectionTests} onAdd={() => setEditingProvider(null)} onRefresh={() => void refreshState()} onTest={(provider) => void handleTestProvider(provider)} onEdit={(provider) => setEditingProvider(provider)} onDelete={(provider) => void handleDeleteProvider(provider)} />}
+            {activeNav === 'providers' && <ProvidersPage state={state} testResults={connectionTests} onAdd={() => setEditingProvider(null)} onRefresh={() => void refreshState()} onTest={(provider) => void handleTestProvider(provider)} onCredential={(provider) => setCredentialProvider(provider)} onEdit={(provider) => setEditingProvider(provider)} onDelete={(provider) => void handleDeleteProvider(provider)} />}
             {activeNav === 'models' && <ModelsPage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
             {activeNav === 'profiles' && <ProfilePage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
             {activeNav === 'diagnostics' && <DiagnosticsPage state={state} />}
@@ -1546,6 +1654,7 @@ function App() {
         </div>
       </main>
       <ProviderEditorModal key={editingProvider === undefined ? 'closed' : editingProvider?.id || 'create'} provider={editingProvider} isOpen={editingProvider !== undefined} onClose={() => setEditingProvider(undefined)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
+      <CredentialModal key={credentialProvider?.id || 'credential-closed'} provider={credentialProvider} isOpen={Boolean(credentialProvider)} onClose={() => setCredentialProvider(null)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
       <DeployModal key={showDeployModal ? 'open' : 'closed'} state={state} isOpen={showDeployModal} onClose={() => setShowDeployModal(false)} onApplied={(nextState) => { setState(nextState); setNotice('配置已应用'); setError(''); }} />
     </div>
   );
