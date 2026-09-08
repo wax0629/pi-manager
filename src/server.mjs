@@ -6,8 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createGateway } from "./gateway.mjs";
 import { createPiAuthProbe } from "./pi-auth.mjs";
+import { sanitizeConnectionTestUrl, testProviderConnection } from "./provider-test.mjs";
 import { writePiProfile } from "./profile.mjs";
-import { testProviderConnection } from "./provider-test.mjs";
 import { createStore } from "./store.mjs";
 
 const managerRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -218,6 +218,7 @@ async function providerPublicState(provider, { forceAuth = false } = {}) {
   }
   return {
     ...provider,
+    baseUrl: provider.baseUrl ? sanitizeConnectionTestUrl(provider.baseUrl) : undefined,
     credentialEnv: provider.credentialEnv || undefined,
     credentialConfigured,
     status,
