@@ -28,7 +28,7 @@ Model context metadata editing
 
 Profile apply/launch/stop/rollback
   -> /api/apply + /api/pi/launch + /api/pi/stop + /api/profile/rollback
-  -> isolated profile generation, launch entry, stop control and last-applied snapshot restore
+  -> Pi-compatible isolated profile generation, launch entry, stop control and last-applied snapshot restore
 
 Provider connection testing
   -> /api/providers/:id/test
@@ -71,6 +71,8 @@ new decision if the information is intentionally folded into the provider page.
 - Edit thinking-level mappings with Pi-level vs upstream-value vs unsupported
   states, then persist them through the manager state and profile generator.
 - Apply, launch, stop and roll back the isolated profile from the Profile page.
+- Keep generated settings, models and extensions at the profile root expected by
+  Pi's PI_CODING_AGENT_DIR, while preserving unrelated legacy files.
 - Validate candidate routes against provider credentials, bridge status and
   model thinking capabilities before saving them.
 - Track a minimal candidate revision and applied revision so the UI can

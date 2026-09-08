@@ -7,6 +7,29 @@ function shellQuote(value) {
   return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
 
+function removeLegacyManagerFiles(runtimeDir) {
+  const legacyDir = path.join(runtimeDir, ".pi");
+  const legacyFiles = [
+    path.join(legacyDir, "settings.json"),
+    path.join(legacyDir, "models.json"),
+    path.join(legacyDir, "extensions", "pi-manager-provider.ts")
+  ];
+  for (const filePath of legacyFiles) {
+    try {
+      fs.unlinkSync(filePath);
+    } catch {
+      // A missing legacy file is expected for new profiles.
+    }
+  }
+  for (const dirPath of [path.join(legacyDir, "extensions"), legacyDir]) {
+    try {
+      fs.rmdirSync(dirPath);
+    } catch {
+      // Preserve any non-Manager files left in an older profile.
+    }
+  }
+}
+
 function piThinkingMap(provider, model) {
   return model.thinkingLevelMap || {};
 }
@@ -94,7 +117,9 @@ export function writePiProfile({ dataDir, state, piExecutable = "pi" }) {
   const gateway = state.gateway || { host: "127.0.0.1", port: 8675, clientKey: "" };
 
   const runtimeDir = path.join(dataDir, "profiles", "active");
-  const piDir = path.join(runtimeDir, ".pi");
+  const piDir = runtimeDir;
+  fs.mkdirSync(runtimeDir, { recursive: true, mode: 0o700 });
+  removeLegacyManagerFiles(runtimeDir);
   const extensionsDir = path.join(piDir, "extensions");
   fs.mkdirSync(extensionsDir, { recursive: true, mode: 0o700 });
   const extensionPath = path.join(extensionsDir, "pi-manager-provider.ts");
