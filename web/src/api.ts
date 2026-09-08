@@ -2,6 +2,7 @@ import type {
   CreateProviderInput,
   CreateProviderResponse,
   ManagerState,
+  ProviderConnectionTestResult,
   StateResponse,
 } from './types';
 
@@ -56,6 +57,12 @@ export async function createProvider(input: CreateProviderInput): Promise<Create
 export async function deleteProvider(providerId: string): Promise<StateResponse> {
   return request<StateResponse>(`/api/providers/${encodeURIComponent(providerId)}`, {
     method: 'DELETE',
+  });
+}
+
+export async function testProviderConnection(providerId: string): Promise<{ ok: true; result: ProviderConnectionTestResult; state: ManagerState }> {
+  return request<{ ok: true; result: ProviderConnectionTestResult; state: ManagerState }>(`/api/providers/${encodeURIComponent(providerId)}/test`, {
+    method: 'POST',
   });
 }
 

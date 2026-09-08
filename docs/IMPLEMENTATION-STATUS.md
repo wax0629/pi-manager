@@ -25,6 +25,10 @@ Cycle list editing
 Profile apply/launch/stop/rollback
   -> /api/apply + /api/pi/launch + /api/pi/stop + /api/profile/rollback
   -> isolated profile generation, launch entry, stop control and last-applied snapshot restore
+
+Provider connection testing
+  -> /api/providers/:id/test
+  -> single-action reachability probe with categorized failures
 ```
 
 The implementation uses the existing card layout from the prototype as the
@@ -52,6 +56,8 @@ new decision if the information is intentionally folded into the provider page.
 - Add a custom OpenAI-compatible provider with one or more model IDs.
 - Save an optional API key through the existing credential abstraction without
   returning the key in API state.
+- Test provider connectivity from the provider cards with categorized failure
+  messages.
 - Keep provider cards focused on connection resources; configure the default
   provider, model and thinking level from the model resource page.
 - Edit the Ctrl+P cycling list with ordered add/remove/reorder controls and
@@ -70,7 +76,7 @@ new decision if the information is intentionally folded into the provider page.
 
 - Pi-native OAuth PTY flow;
 - profile diff preview and process ownership;
-- real provider connection tests and model discovery;
+- real provider model discovery;
 - Antigravity adapter.
 
 ## Verification

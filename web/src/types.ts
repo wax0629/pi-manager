@@ -67,6 +67,18 @@ export interface ManagerEvent {
   detail: string;
 }
 
+export interface ProviderConnectionTestResult {
+  providerId: string;
+  providerName: string;
+  ok: boolean;
+  category: 'success' | 'auth' | 'not_found' | 'rate_limit' | 'timeout' | 'dns' | 'tls' | 'network' | 'protocol' | 'subscription' | 'unknown';
+  message: string;
+  detail: string;
+  status: number;
+  testedAt: string;
+  durationMs: number;
+}
+
 export interface CycleListEntry {
   index: number;
   ref: string;

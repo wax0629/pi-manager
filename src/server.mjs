@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createGateway } from "./gateway.mjs";
 import { writePiProfile } from "./profile.mjs";
+import { testProviderConnection } from "./provider-test.mjs";
 import { createStore } from "./store.mjs";
 
 const managerRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -428,6 +429,19 @@ async function handleApi(req, res, pathname) {
   }
   if (req.method === "POST" && pathname === "/api/bridge/open") {
     sendJson(res, 200, { ok: true, ...(await openBridge()) });
+    return;
+  }
+  if (req.method === "POST" && pathname.startsWith("/api/providers/") && pathname.endsWith("/test")) {
+    const providerId = pathname.split("/")[3];
+    const provider = store.provider(providerId);
+    if (!provider) throw new Error("渠道不存在");
+    const result = await testProviderConnection({
+      provider,
+      credential: store.credential(provider),
+      detectPi
+    });
+    store.recordEvent("provider-test", `已测试 ${provider.name}`, `${result.category} · ${result.message}`);
+    sendJson(res, 200, { ok: true, result, state: await publicState() });
     return;
   }
   if (req.method === "POST" && pathname === "/api/project") {

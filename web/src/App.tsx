@@ -31,6 +31,7 @@ import {
   getState,
   launchPi,
   rollbackProfile,
+  testProviderConnection,
   stopPi,
   updateCycleList,
   routeProvider,
@@ -41,6 +42,7 @@ import type {
   CycleListEntry,
   ManagerState,
   ModelDefinition,
+  ProviderConnectionTestResult,
   ProviderState,
   ThinkingLevel,
   ThinkingLevelMap,
@@ -248,8 +250,10 @@ function Topbar({ state, onDeploy, onRefresh, refreshing }: { state: ManagerStat
   );
 }
 
-function ProviderCard({ provider, onRefresh, onDelete }: {
+function ProviderCard({ provider, testResult, onTest, onRefresh, onDelete }: {
   provider: ProviderState;
+  testResult?: ProviderConnectionTestResult;
+  onTest: () => void;
   onRefresh: () => void;
   onDelete: () => void;
 }) {
@@ -304,11 +308,30 @@ function ProviderCard({ provider, onRefresh, onDelete }: {
           </div>
           <p className="mt-1 pl-[22px] text-[11px] leading-4 text-surface-500">{provider.detail}</p>
         </div>
+        {testResult && (
+          <div className={`rounded-md border p-3 text-[11px] leading-4 ${testResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300' : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300'}`}>
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-medium">连接测试</span>
+              <span className="font-mono">{testResult.ok ? '通过' : '失败'} · {testResult.category}</span>
+            </div>
+            <div className="mt-1">{testResult.message}</div>
+            <div className="mt-1 font-mono text-[10px] opacity-80">{testResult.detail}</div>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between border-t border-surface-100 bg-surface-50/30 px-3 py-3 dark:border-surface-800/50 dark:bg-[#0a0a0a]">
         <span className="px-2.5 text-[11px] text-surface-500">实际使用模型在模型资源库配置</span>
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onTest}
+            title="测试供应商连接"
+            aria-label={`测试 ${provider.name} 连接`}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-white"
+          >
+            <CheckCircle2 size={14} />
+          </button>
           <button
             type="button"
             onClick={onRefresh}
@@ -335,10 +358,12 @@ function ProviderCard({ provider, onRefresh, onDelete }: {
   );
 }
 
-function ProvidersPage({ state, onAdd, onRefresh, onDelete }: {
+function ProvidersPage({ state, testResults, onAdd, onRefresh, onTest, onDelete }: {
   state: ManagerState;
+  testResults: Record<string, ProviderConnectionTestResult>;
   onAdd: () => void;
   onRefresh: () => void;
+  onTest: (provider: ProviderState) => void;
   onDelete: (provider: ProviderState) => void;
 }) {
   const [filter, setFilter] = useState<'all' | 'ready' | 'native'>('all');
@@ -412,6 +437,8 @@ function ProvidersPage({ state, onAdd, onRefresh, onDelete }: {
             <ProviderCard
               key={provider.id}
               provider={provider}
+              testResult={testResults[provider.id]}
+              onTest={() => onTest(provider)}
               onRefresh={onRefresh}
               onDelete={() => onDelete(provider)}
             />
@@ -1333,6 +1360,7 @@ function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [connectionTests, setConnectionTests] = useState<Record<string, ProviderConnectionTestResult>>({});
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeployModal, setShowDeployModal] = useState(false);
 
@@ -1376,8 +1404,24 @@ function App() {
       const response = await deleteProvider(provider.id);
       setState(response.state);
       setNotice(`已删除 ${provider.name}`);
+      setConnectionTests((current) => {
+        const next = { ...current };
+        delete next[provider.id];
+        return next;
+      });
     } catch (caughtError) {
       setError(caughtError instanceof ApiError ? caughtError.message : '删除供应商失败。');
+    }
+  };
+
+  const handleTestProvider = async (provider: ProviderState) => {
+    try {
+      const response = await testProviderConnection(provider.id);
+      setState(response.state);
+      setConnectionTests((current) => ({ ...current, [provider.id]: response.result }));
+      setNotice(`${provider.name} 连接测试：${response.result.message}`);
+    } catch (caughtError) {
+      setError(caughtError instanceof ApiError ? caughtError.message : '连接测试失败。');
     }
   };
 
@@ -1398,7 +1442,7 @@ function App() {
           <div className="mx-auto max-w-[1200px] pb-20">
             {error && <div className="mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
             {notice && <div className="mb-5 flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={14} className="mr-2" />{notice}</div>}
-            {activeNav === 'providers' && <ProvidersPage state={state} onAdd={() => setShowAddModal(true)} onRefresh={() => void refreshState()} onDelete={(provider) => void handleDeleteProvider(provider)} />}
+            {activeNav === 'providers' && <ProvidersPage state={state} testResults={connectionTests} onAdd={() => setShowAddModal(true)} onRefresh={() => void refreshState()} onTest={(provider) => void handleTestProvider(provider)} onDelete={(provider) => void handleDeleteProvider(provider)} />}
             {activeNav === 'models' && <ModelsPage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
             {activeNav === 'profiles' && <ProfilePage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
             {activeNav === 'diagnostics' && <DiagnosticsPage state={state} />}
