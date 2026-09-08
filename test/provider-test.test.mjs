@@ -37,16 +37,22 @@ test("connection test reports auth and timeout categories", async () => {
 });
 
 test("native subscription test uses Pi auth state", async () => {
+  let requestedProvider = "";
   const result = await testProviderConnection({
     provider: {
-      id: "openai-codex",
+      id: "codex-account",
       name: "OpenAI Codex",
-      kind: "native-subscription"
+      kind: "native-subscription",
+      piProvider: "openai-codex"
     },
     credential: "",
-    detectPi: () => ({ subscriptionReady: true })
+    detectPi: (providerId) => {
+      requestedProvider = providerId;
+      return { subscriptionReady: true };
+    }
   });
 
   assert.equal(result.ok, true);
   assert.equal(result.category, CONNECTION_TEST_CATEGORIES.SUCCESS);
+  assert.equal(requestedProvider, "openai-codex");
 });

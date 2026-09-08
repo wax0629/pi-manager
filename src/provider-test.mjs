@@ -85,7 +85,7 @@ export async function testProviderConnection({ provider, credential, detectPi, f
   const startedAt = Date.now();
 
   if (provider.kind === "native-subscription") {
-    const piInfo = detectPi();
+    const piInfo = detectPi(provider.piProvider || provider.id);
     const ok = Boolean(piInfo.subscriptionReady);
     return normalizeResult({
       provider,

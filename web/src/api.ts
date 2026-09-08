@@ -42,8 +42,8 @@ async function request<T>(pathname: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-export async function getState(): Promise<ManagerState> {
-  const payload = await request<ManagerState>('/api/state');
+export async function getState(forceRefresh = false): Promise<ManagerState> {
+  const payload = await request<ManagerState>(forceRefresh ? '/api/state?refresh=1' : '/api/state');
   return payload;
 }
 

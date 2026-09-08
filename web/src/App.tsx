@@ -1444,7 +1444,7 @@ function App() {
   const refreshState = async () => {
     setRefreshing(true);
     try {
-      const nextState = await getState();
+      const nextState = await getState(true);
       setState(nextState);
       setError('');
       setNotice('状态已刷新');

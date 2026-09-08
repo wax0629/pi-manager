@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createGateway } from "./gateway.mjs";
+import { createPiAuthProbe } from "./pi-auth.mjs";
 import { writePiProfile } from "./profile.mjs";
 import { testProviderConnection } from "./provider-test.mjs";
 import { createStore } from "./store.mjs";
@@ -30,6 +31,7 @@ function resolvePiExecutable() {
 }
 
 const piExecutable = resolvePiExecutable();
+const piAuthProbe = createPiAuthProbe({ executable: piExecutable });
 const store = createStore({ projectRoot, dataDir });
 let piInfo = null;
 let bridgeInfoCache = new Map();
@@ -147,36 +149,48 @@ async function bridgeStatus(provider) {
   return result;
 }
 
-function detectPi() {
-  if (piInfo) return piInfo;
-  const result = { installed: false, path: piExecutable, version: "", subscriptionReady: false };
-  try {
-    result.version = execFileSync(piExecutable, ["--version"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-    result.installed = true;
-  } catch {
-    piInfo = result;
-    return result;
+function detectPi(providerId = "openai-codex", { force = false } = {}) {
+  if (!piInfo) {
+    const detected = { installed: false, path: piExecutable, version: "" };
+    try {
+      detected.version = execFileSync(piExecutable, ["--version"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+      detected.installed = true;
+    } catch {
+      // A missing Pi executable is represented as an unavailable environment.
+    }
+    piInfo = detected;
   }
-  try {
-    const raw = execFileSync(piExecutable, ["auth", "check", "--provider", "openai-codex", "--json", "--no-refresh"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"]
-    });
-    const parsed = JSON.parse(raw);
-    result.subscriptionReady = Boolean(parsed.authenticated || parsed.ready || parsed.ok || parsed.status === "authenticated");
-  } catch {
-    result.subscriptionReady = false;
+
+  if (!piInfo.installed) {
+    return { ...piInfo, subscriptionReady: false, authStatus: "unavailable", authType: "", authReason: "check_failed" };
   }
-  piInfo = result;
-  return result;
+
+  const auth = piAuthProbe.check(providerId, { force });
+  return {
+    ...piInfo,
+    subscriptionReady: auth.ready,
+    authStatus: auth.status,
+    authType: auth.authType,
+    authReason: auth.reason
+  };
 }
 
-async function providerPublicState(provider) {
+function nativeAuthDetail(pi) {
+  if (!pi?.installed) return "未检测到 Pi 可执行文件";
+  if (pi.subscriptionReady) return pi.authType ? `Pi 原生认证已就绪（${pi.authType}）` : "Pi 原生认证已就绪";
+  if (pi.authReason === "credentials_not_configured" || pi.authReason === "auth_required") return "尚未完成 Pi 原生授权";
+  if (pi.authReason === "expired") return "Pi 原生认证已过期";
+  if (pi.authReason === "check_failed" || pi.authReason === "invalid_response") return "无法读取 Pi 原生认证状态";
+  return "Pi 原生认证未就绪";
+}
+
+async function providerPublicState(provider, { forceAuth = false } = {}) {
   const credentialConfigured = store.credentialConfigured(provider);
+  const nativeAuth = provider.kind === "native-subscription" ? detectPi(provider.piProvider || provider.id, { force: forceAuth }) : null;
   let status = provider.kind === "native-subscription"
-    ? (detectPi().subscriptionReady ? "ready" : "not-configured")
+    ? (nativeAuth?.subscriptionReady ? "ready" : "not-configured")
     : (credentialConfigured ? "ready" : "not-configured");
-  let detail = provider.kind === "native-subscription" ? "Pi 原生认证" : "凭据未写入 Manager";
+  let detail = provider.kind === "native-subscription" ? nativeAuthDetail(nativeAuth) : "凭据未写入 Manager";
   if (provider.kind === "local-bridge") {
     const bridge = await bridgeStatus(provider);
     if (!bridge.running) {
@@ -201,9 +215,9 @@ async function providerPublicState(provider) {
   };
 }
 
-async function publicState() {
+async function publicState({ forceAuth = false } = {}) {
   const current = store.get();
-  const providers = await Promise.all(current.providers.map(providerPublicState));
+  const providers = await Promise.all(current.providers.map((provider) => providerPublicState(provider, { forceAuth })));
   const activeProvider = providers.find((provider) => provider.id === current.active.providerId);
   const activeModel = activeProvider?.models.find((model) => model.id === current.active.modelId);
   const gatewayStats = gateway.getStats();
@@ -344,9 +358,9 @@ const gateway = createGateway({
   }
 });
 
-async function handleApi(req, res, pathname) {
+async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
   if (req.method === "GET" && pathname === "/api/state") {
-    sendJson(res, 200, await publicState());
+    sendJson(res, 200, await publicState({ forceAuth }));
     return;
   }
   if (req.method === "GET" && pathname === "/api/events") {
@@ -359,7 +373,7 @@ async function handleApi(req, res, pathname) {
     if (!provider) throw new Error("渠道不存在");
     const model = provider.models.find((item) => item.id === body.modelId);
     if (!model) throw new Error("模型不存在");
-    if (provider.kind === "native-subscription" && !detectPi().subscriptionReady) {
+    if (provider.kind === "native-subscription" && !detectPi(provider.piProvider || provider.id).subscriptionReady) {
       throw new Error(`渠道 ${provider.name} 尚未完成 Pi 原生授权`);
     }
     if (provider.kind !== "native-subscription" && !store.credentialConfigured(provider)) {
@@ -444,7 +458,7 @@ async function handleApi(req, res, pathname) {
     const result = await testProviderConnection({
       provider,
       credential: store.credential(provider),
-      detectPi
+      detectPi: (providerId) => detectPi(providerId, { force: true })
     });
     store.recordEvent("provider-test", `已测试 ${provider.name}`, `${result.category} · ${result.message}`);
     sendJson(res, 200, { ok: true, result, state: await publicState() });
@@ -531,7 +545,7 @@ async function handleRequest(req, res) {
   }
   if (url.pathname.startsWith("/api/")) {
     try {
-      await handleApi(req, res, url.pathname);
+      await handleApi(req, res, url.pathname, { forceAuth: url.searchParams.get("refresh") === "1" });
     } catch (error) {
       sendError(res, error, 400);
     }
