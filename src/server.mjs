@@ -75,6 +75,17 @@ async function ensureCycleListReady() {
   }
 }
 
+function collectProviderCredentials() {
+  const credentials = {};
+  for (const provider of store.get().providers) {
+    const secret = store.credential(provider);
+    if (String(secret || "").trim()) {
+      credentials[provider.id] = secret;
+    }
+  }
+  return credentials;
+}
+
 function sendJson(res, status, value) {
   const body = JSON.stringify(value);
   res.statusCode = status;
@@ -258,7 +269,12 @@ async function publicState({ forceAuth = false } = {}) {
 
 function applyProfile() {
   const appliedSnapshot = store.snapshotConfiguration();
-  const profile = writePiProfile({ dataDir: store.dataDir, state: store.get(), piExecutable });
+  const profile = writePiProfile({
+    dataDir: store.dataDir,
+    state: store.get(),
+    piExecutable,
+    credentials: collectProviderCredentials()
+  });
   store.update((state) => {
     state.runtime.profilePath = profile.runtimeDir;
     state.runtime.extensionPath = profile.extensionPath;
@@ -297,8 +313,6 @@ async function stopGateway() {
 
 async function launchPi() {
   await ensureCycleListReady();
-  const activeProvider = store.provider(store.get().active.providerId);
-  if (activeProvider?.kind !== "native-subscription" && store.get().gateway.enabled && !gateway.isRunning()) await startGateway();
   const profile = applyProfile();
   const child = await import("node:child_process").then(({ spawn }) => spawn(profile.launcherPath, [], {
     cwd: store.get().targetProject,
@@ -400,8 +414,6 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
   }
   if (req.method === "POST" && pathname === "/api/apply") {
     await ensureCycleListReady();
-    const provider = store.provider(store.get().active.providerId);
-    if (provider?.kind !== "native-subscription" && store.get().gateway.enabled && !gateway.isRunning()) await startGateway();
     const profile = applyProfile();
     sendJson(res, 200, { ok: true, profile, state: await publicState() });
     return;

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { writeJsonAtomic } from "./store.mjs";
+import { safeId, writeJsonAtomic } from "./store.mjs";
 import { assertSupportedThinkingLevel, getThinkingLevelValue } from "./thinking.mjs";
 
 function shellQuote(value) {
@@ -32,6 +32,11 @@ function removeLegacyManagerFiles(runtimeDir) {
 
 function piThinkingMap(provider, model) {
   return model.thinkingLevelMap || {};
+}
+
+function providerApiKeyEnvName(providerId) {
+  const normalized = safeId(providerId).replaceAll("-", "_").toUpperCase();
+  return `PI_MANAGER_${normalized || "PROVIDER"}_API_KEY`;
 }
 
 function resolveModelReference(providers, ref) {
@@ -68,6 +73,18 @@ function buildEnabledModels(state) {
   return enabledModels;
 }
 
+function buildModelOverrides(provider) {
+  const modelOverrides = Object.fromEntries(
+    provider.models.map((item) => [item.id, {
+      contextWindow: item.contextWindow,
+      ...(item.reasoning && item.thinkingLevelMap && Object.keys(item.thinkingLevelMap).length > 0
+        ? { thinkingLevelMap: item.thinkingLevelMap }
+        : {})
+    }])
+  );
+  return Object.keys(modelOverrides).length > 0 ? modelOverrides : null;
+}
+
 function toPiModel(provider, model) {
   return {
     id: model.id,
@@ -86,114 +103,97 @@ function toPiModel(provider, model) {
   };
 }
 
-function writeLauncher({ launcherPath, provider, active, runtimeDir, extensionPath, targetProject, gateway, piExecutable }) {
-  const native = provider.kind === "native-subscription";
-  const args = ["--no-extensions"];
-  if (!native) args.push("-e", extensionPath);
-  args.push("--provider", native ? provider.piProvider || provider.id : "pi-manager");
-  args.push("--model", active.modelId);
+function buildModelsJson(state, credentials = {}) {
+  const providers = {};
+  for (const provider of state.providers || []) {
+    if (provider.kind === "native-subscription") {
+      const modelOverrides = buildModelOverrides(provider);
+      if (modelOverrides) {
+        providers[provider.piProvider || provider.id] = { modelOverrides };
+      }
+      continue;
+    }
+
+    const secret = String(credentials?.[provider.id] || "").trim();
+    if (!secret) continue;
+
+    providers[provider.id] = {
+      baseUrl: provider.baseUrl,
+      api: "openai-completions",
+      apiKey: `$${providerApiKeyEnvName(provider.id)}`,
+      models: provider.models.map((item) => toPiModel(provider, item))
+    };
+  }
+  return Object.keys(providers).length > 0 ? { providers } : null;
+}
+
+function buildCredentialExports(state, credentials) {
+  return (state.providers || [])
+    .filter((provider) => provider.kind !== "native-subscription")
+    .flatMap((provider) => {
+      const secret = credentials?.[provider.id];
+      const normalized = String(secret || "").trim();
+      if (!normalized) return [];
+      return [{ name: providerApiKeyEnvName(provider.id), value: normalized }];
+    });
+}
+
+function writeLauncher({ launcherPath, providerId, active, runtimeDir, targetProject, piExecutable, credentialExports = [] }) {
+  const args = ["--no-extensions", "--provider", providerId, "--model", active.modelId];
   if (active.thinking) args.push("--thinking", active.thinking);
 
   const lines = [
     "#!/bin/zsh",
     "set -e",
-    `cd ${shellQuote(targetProject)}`
+    `cd ${shellQuote(targetProject)}`,
+    `export PI_CODING_AGENT_DIR=${shellQuote(runtimeDir)}`,
+    `export PI_CODING_AGENT_SESSION_DIR=${shellQuote(path.join(runtimeDir, "sessions"))}`
   ];
-  if (!native) {
-    lines.push(`export PI_CODING_AGENT_DIR=${shellQuote(runtimeDir)}`);
-    lines.push(`export PI_MANAGER_GATEWAY_KEY=${shellQuote(gateway.clientKey)}`);
+  for (const entry of credentialExports) {
+    lines.push(`export ${entry.name}=${shellQuote(entry.value)}`);
   }
   lines.push(`exec ${shellQuote(piExecutable)} ${args.map(shellQuote).join(" ")}`);
   fs.writeFileSync(launcherPath, `${lines.join("\n")}\n`, { mode: 0o700 });
   fs.chmodSync(launcherPath, 0o700);
 }
 
-export function writePiProfile({ dataDir, state, piExecutable = "pi" }) {
+export function writePiProfile({ dataDir, state, piExecutable = "pi", credentials = {} }) {
   const provider = state.providers.find((item) => item.id === state.active.providerId);
   if (!provider) throw new Error("当前渠道不存在");
   const model = provider.models.find((item) => item.id === state.active.modelId);
   if (!model) throw new Error("当前模型不存在");
   assertSupportedThinkingLevel(model, state.active.thinking);
-  const gateway = state.gateway || { host: "127.0.0.1", port: 8675, clientKey: "" };
 
   const runtimeDir = path.join(dataDir, "profiles", "active");
   const piDir = runtimeDir;
   fs.mkdirSync(runtimeDir, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(path.join(runtimeDir, "sessions"), { recursive: true, mode: 0o700 });
   removeLegacyManagerFiles(runtimeDir);
-  const extensionsDir = path.join(piDir, "extensions");
-  fs.mkdirSync(extensionsDir, { recursive: true, mode: 0o700 });
-  const extensionPath = path.join(extensionsDir, "pi-manager-provider.ts");
   const settingsPath = path.join(piDir, "settings.json");
   const modelsPath = path.join(piDir, "models.json");
   const launcherPath = path.join(runtimeDir, process.platform === "darwin" ? "launch-pi.command" : "launch-pi.sh");
+  const extensionPath = "";
 
   const native = provider.kind === "native-subscription";
-  const settings = native
-    ? {
-        defaultProvider: provider.piProvider || provider.id,
-        defaultModel: model.id,
-        enabledModels: buildEnabledModels(state)
-      }
-    : {
-        defaultProvider: "pi-manager",
-        defaultModel: model.id,
-        enabledModels: buildEnabledModels(state)
-      };
+  const settings = {
+    defaultProvider: native ? provider.piProvider || provider.id : provider.id,
+    defaultModel: model.id,
+    enabledModels: buildEnabledModels(state)
+  };
   writeJsonAtomic(settingsPath, settings);
 
-  if (native) {
-    for (const filePath of [extensionPath]) {
-      try {
-        fs.unlinkSync(filePath);
-      } catch {
-        // Native subscriptions do not need a custom provider extension.
-      }
-    }
-    const modelOverrides = Object.fromEntries(
-      provider.models.map((item) => [item.id, {
-        contextWindow: item.contextWindow,
-        ...(item.reasoning && item.thinkingLevelMap && Object.keys(item.thinkingLevelMap).length > 0
-          ? { thinkingLevelMap: item.thinkingLevelMap }
-          : {})
-      }])
-    );
-    if (Object.keys(modelOverrides).length > 0) {
-      writeJsonAtomic(modelsPath, {
-        providers: {
-          [provider.piProvider || provider.id]: { modelOverrides }
-        }
-      });
-    } else {
-      try {
-        fs.unlinkSync(modelsPath);
-      } catch {
-        // No model override is needed for this native profile.
-      }
-    }
+  const modelsConfig = buildModelsJson(state, credentials);
+  if (modelsConfig) {
+    writeJsonAtomic(modelsPath, modelsConfig);
   } else {
     try {
       fs.unlinkSync(modelsPath);
     } catch {
-      // Custom providers use the generated extension instead of models.json.
+      // No provider/model metadata needs to be injected for this profile.
     }
-    const piModels = provider.models.map((item) => toPiModel(provider, item));
-    const extension = [
-      'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
-      "",
-      "export default function (pi: ExtensionAPI) {",
-      "  pi.registerProvider(\"pi-manager\", {",
-      `    name: ${JSON.stringify(`Pi Manager / ${provider.name}`)},`,
-      `    baseUrl: ${JSON.stringify(`http://${gateway.host}:${gateway.port}/v1`)},`,
-      '    apiKey: "$PI_MANAGER_GATEWAY_KEY",',
-      '    api: "openai-completions",',
-      `    models: ${JSON.stringify(piModels, null, 2)}`,
-      "  });",
-      "}",
-      ""
-    ].join("\n");
-    fs.writeFileSync(extensionPath, extension, { mode: 0o600 });
-    fs.chmodSync(extensionPath, 0o600);
   }
+
+  const credentialExports = buildCredentialExports(state, credentials);
 
   const manifestPath = path.join(runtimeDir, "profile.json");
   writeJsonAtomic(manifestPath, {
@@ -206,21 +206,20 @@ export function writePiProfile({ dataDir, state, piExecutable = "pi" }) {
     thinking: state.active.thinking,
     thinkingValue: getThinkingLevelValue(model, state.active.thinking),
     cycleModelRefs: buildEnabledModels(state),
-    mode: native ? "native-subscription" : "manager-gateway"
+    mode: native ? "native-subscription" : "models-json"
   });
 
   writeLauncher({
     launcherPath,
-    provider,
+    providerId: native ? provider.piProvider || provider.id : provider.id,
     active: state.active,
     runtimeDir,
-    extensionPath,
     targetProject: state.targetProject,
-    gateway: state.gateway,
-    piExecutable
+    piExecutable,
+    credentialExports
   });
 
-  return { runtimeDir, extensionPath, settingsPath, modelsPath, launcherPath, manifestPath, mode: native ? "native-subscription" : "manager-gateway" };
+  return { runtimeDir, extensionPath, settingsPath, modelsPath, launcherPath, manifestPath, mode: native ? "native-subscription" : "models-json" };
 }
 
-export { piThinkingMap, shellQuote, toPiModel };
+export { piThinkingMap, shellQuote, toPiModel, providerApiKeyEnvName };

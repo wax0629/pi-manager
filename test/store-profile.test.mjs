@@ -86,9 +86,10 @@ test("custom provider validation rejects unsupported URLs and empty model lists"
   );
 });
 
-test("profile generation writes an isolated custom provider extension without the upstream key", (t) => {
+test("profile generation writes ready providers into models.json and keeps the launcher isolated", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  store.setCredential("qiniu", "qiniu-secret-value");
   store.addProvider({
     id: "demo-relay",
     name: "Demo Relay",
@@ -106,28 +107,42 @@ test("profile generation writes an isolated custom provider extension without th
   });
   store.setActive({ providerId: "demo-relay", modelId: "demo-model", thinking: "high" });
 
-  const profile = writePiProfile({ dataDir: fixture.dataDir, state: store.get(), piExecutable: "/usr/bin/pi" });
+  const profile = writePiProfile({
+    dataDir: fixture.dataDir,
+    state: store.get(),
+    piExecutable: "/usr/bin/pi",
+    credentials: {
+      qiniu: "qiniu-secret-value",
+      "demo-relay": "test-secret-value"
+    }
+  });
   const settings = JSON.parse(fs.readFileSync(profile.settingsPath, "utf8"));
-  const extension = fs.readFileSync(profile.extensionPath, "utf8");
+  const models = JSON.parse(fs.readFileSync(profile.modelsPath, "utf8"));
   const launcher = fs.readFileSync(profile.launcherPath, "utf8");
 
+  assert.equal(profile.mode, "models-json");
+  assert.equal(profile.extensionPath, "");
   assert.equal(path.dirname(profile.settingsPath), profile.runtimeDir);
-  assert.equal(path.dirname(profile.extensionPath), path.join(profile.runtimeDir, "extensions"));
   assert.equal(fs.existsSync(path.join(profile.runtimeDir, ".pi", "settings.json")), false);
-  assert.equal(settings.defaultProvider, "pi-manager");
+  assert.equal(settings.defaultProvider, "demo-relay");
+  assert.equal(settings.defaultModel, "demo-model");
   assert.deepEqual(settings.enabledModels, [
     "qiniu/gpt-5.6-luna",
     "openai-codex/gpt-5.6-luna",
     "qiniu/gpt-5.6-sol"
   ]);
-  assert.equal(extension.includes("test-secret-value"), false);
-  assert.equal(extension.includes("https://relay.example.test"), false);
-  assert.equal(extension.includes("http://127.0.0.1:8675/v1"), true);
-  assert.equal(launcher.includes(`export PI_MANAGER_GATEWAY_KEY='${store.get().gateway.clientKey}'`), true);
-  assert.equal(launcher.includes("PI_CODING_AGENT_DIR"), true);
-  assert.equal(launcher.includes("--provider"), true);
+  assert.equal(models.providers["demo-relay"].baseUrl, "https://relay.example.test/v1");
+  assert.equal(models.providers["demo-relay"].apiKey, "$PI_MANAGER_DEMO_RELAY_API_KEY");
+  assert.equal(models.providers["qiniu"].baseUrl, "https://llmapi.qiniu.io/v1");
+  assert.equal(models.providers["qiniu"].apiKey, "$PI_MANAGER_QINIU_API_KEY");
+  assert.equal(models.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].thinkingLevelMap.max, "max");
+  assert.equal(launcher.includes(`export PI_CODING_AGENT_DIR='${profile.runtimeDir}'`), true);
+  assert.equal(launcher.includes(`export PI_CODING_AGENT_SESSION_DIR='${path.join(profile.runtimeDir, "sessions")}'`), true);
+  assert.equal(launcher.includes(`export PI_MANAGER_DEMO_RELAY_API_KEY='test-secret-value'`), true);
+  assert.equal(launcher.includes(`export PI_MANAGER_QINIU_API_KEY='qiniu-secret-value'`), true);
+  assert.equal(launcher.includes("PI_MANAGER_GATEWAY_KEY"), false);
+  assert.equal(launcher.includes("'--provider' 'demo-relay'"), true);
   assert.equal(launcher.includes("'demo-model'"), true);
-  assert.equal(launcher.includes("test-secret-value"), false);
 });
 
 test("profile migration removes only known legacy Manager files", (t) => {
@@ -315,25 +330,51 @@ test("profile writes the saved thinking map without silently downgrading levels"
   });
   store.setActive({ providerId: "demo-relay", modelId: "demo-model", thinking: "high" });
 
-  const profile = writePiProfile({ dataDir: fixture.dataDir, state: store.get(), piExecutable: "/usr/bin/pi" });
-  const extension = fs.readFileSync(profile.extensionPath, "utf8");
+  const profile = writePiProfile({
+    dataDir: fixture.dataDir,
+    state: store.get(),
+    piExecutable: "/usr/bin/pi",
+    credentials: { "demo-relay": "test-secret-value" }
+  });
+  const models = JSON.parse(fs.readFileSync(profile.modelsPath, "utf8"));
 
-  assert.match(extension, /"medium": "balanced"/);
-  assert.match(extension, /"high": "deep"/);
-  assert.match(extension, /"xhigh": null/);
-  assert.doesNotMatch(extension, /"max": "high"/);
+  assert.equal(profile.extensionPath, "");
+  assert.match(JSON.stringify(models.providers["demo-relay"]), /"medium":"balanced"/);
+  assert.match(JSON.stringify(models.providers["demo-relay"]), /"high":"deep"/);
+  assert.match(JSON.stringify(models.providers["demo-relay"]), /"xhigh":null/);
+  assert.doesNotMatch(JSON.stringify(models.providers["demo-relay"]), /"max":"high"/);
 });
 
 test("native profiles write model thinking overrides to models.json", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
-  store.setActive({ providerId: "openai-codex", modelId: "gpt-5.6-luna", thinking: "high" });
-  const profile = writePiProfile({ dataDir: fixture.dataDir, state: store.get(), piExecutable: "/usr/bin/pi" });
+  const profile = writePiProfile({
+    dataDir: fixture.dataDir,
+    state: store.get(),
+    piExecutable: "/usr/bin/pi"
+  });
   const models = JSON.parse(fs.readFileSync(profile.modelsPath, "utf8"));
+  const launcher = fs.readFileSync(profile.launcherPath, "utf8");
 
+  store.setActive({ providerId: "openai-codex", modelId: "gpt-5.6-luna", thinking: "high" });
+  const republished = writePiProfile({ dataDir: fixture.dataDir, state: store.get(), piExecutable: "/usr/bin/pi" });
+  const republishedModels = JSON.parse(fs.readFileSync(republished.modelsPath, "utf8"));
+  const republishedLauncher = fs.readFileSync(republished.launcherPath, "utf8");
+
+  assert.equal(profile.extensionPath, "");
+  assert.equal(launcher.includes(`export PI_CODING_AGENT_DIR='${profile.runtimeDir}'`), true);
+  assert.equal(launcher.includes(`export PI_CODING_AGENT_SESSION_DIR='${path.join(profile.runtimeDir, "sessions")}'`), true);
+  assert.equal(launcher.includes("'--provider' 'qiniu'"), true);
+  assert.equal(republished.extensionPath, "");
+  assert.equal(republishedLauncher.includes(`export PI_CODING_AGENT_DIR='${republished.runtimeDir}'`), true);
+  assert.equal(republishedLauncher.includes("'--provider' 'openai-codex'"), true);
+  assert.equal(republishedLauncher.includes("PI_MANAGER_GATEWAY_KEY"), false);
   assert.equal(models.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].thinkingLevelMap.max, "max");
   assert.equal(models.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].thinkingLevelMap.xhigh, "xhigh");
   assert.equal(models.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].contextWindow, 1050000);
+  assert.equal(republishedModels.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].thinkingLevelMap.max, "max");
+  assert.equal(republishedModels.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].thinkingLevelMap.xhigh, "xhigh");
+  assert.equal(republishedModels.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].contextWindow, 1050000);
 });
 
 test("profile injects an edited context window for custom providers", (t) => {
@@ -349,7 +390,13 @@ test("profile injects an edited context window for custom providers", (t) => {
   store.setActive({ providerId: provider.id, modelId: "demo-model", thinking: "off" });
   store.updateModelContextWindow({ providerId: provider.id, modelId: "demo-model", contextWindow: 256000 });
 
-  const profile = writePiProfile({ dataDir: fixture.dataDir, state: store.get(), piExecutable: "/usr/bin/pi" });
-  const extension = fs.readFileSync(profile.extensionPath, "utf8");
-  assert.match(extension, /"contextWindow": 256000/);
+  const profile = writePiProfile({
+    dataDir: fixture.dataDir,
+    state: store.get(),
+    piExecutable: "/usr/bin/pi",
+    credentials: { "demo-relay": "test-secret-value" }
+  });
+  const models = JSON.parse(fs.readFileSync(profile.modelsPath, "utf8"));
+  assert.equal(profile.extensionPath, "");
+  assert.match(JSON.stringify(models.providers["demo-relay"]), /"contextWindow":256000/);
 });
