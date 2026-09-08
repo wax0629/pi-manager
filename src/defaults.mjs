@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import path from "node:path";
 import { buildThinkingLevelMap } from "./thinking.mjs";
 
@@ -140,7 +141,7 @@ export function createDefaultState({ projectRoot }) {
       enabled: true,
       host: "127.0.0.1",
       port: 8675,
-      clientKey: ""
+      clientKey: crypto.randomBytes(24).toString("base64url")
     },
     providers: [
       {
