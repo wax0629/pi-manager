@@ -10,7 +10,7 @@
     "dev:web": "npm --prefix web run dev",
     "build:web": "npm --prefix web run build",
     "test": "node --test",
-    "check": "node --check src/server.mjs && node --check src/store.mjs && node --check src/profile.mjs && node --check src/gateway.mjs"
+    "check": "node --check src/server.mjs && node --check src/store.mjs && node --check src/profile.mjs && node --check src/gateway.mjs && node --check src/pi-auth.mjs"
   },
   "engines": {
     "node": ">=20"

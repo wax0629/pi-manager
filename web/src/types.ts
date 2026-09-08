@@ -136,6 +136,9 @@ export interface ManagerState {
     path: string;
     version: string;
     subscriptionReady: boolean;
+    authStatus?: string;
+    authType?: string;
+    authReason?: string;
   };
   storage: {
     dataDir: string;

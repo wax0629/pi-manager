@@ -33,6 +33,10 @@ Profile apply/launch/stop/rollback
 Provider connection testing
   -> /api/providers/:id/test
   -> single-action reachability probe with categorized failures
+
+Pi native auth status
+  -> provider-specific `pi auth check --provider`
+  -> short-lived cached, credential-free status used by cards, route validation and connection tests
 ```
 
 The implementation uses the existing card layout from the prototype as the
@@ -62,6 +66,9 @@ new decision if the information is intentionally folded into the provider page.
   returning the key in API state.
 - Test provider connectivity from the provider cards with categorized failure
   messages.
+- Detect each native provider's Pi authentication state independently and
+  refresh it after the short cache window without exposing credentials; an
+  explicit UI refresh or connection test forces a fresh probe.
 - Keep provider cards focused on connection resources; configure the default
   provider, model and thinking level from the model resource page.
 - Edit the Ctrl+P cycling list with ordered add/remove/reorder controls and
@@ -82,7 +89,7 @@ new decision if the information is intentionally folded into the provider page.
 
 ## Deferred
 
-- Pi-native OAuth PTY flow;
+- Pi-native OAuth/API login UI and auth import;
 - profile diff preview and process ownership;
 - real provider model discovery;
 - Antigravity adapter.
