@@ -91,6 +91,8 @@ new decision if the information is intentionally folded into the provider page.
 - Edit thinking-level mappings with Pi-level vs upstream-value vs unsupported
   states, then persist them through the manager state and profile generator.
 - Apply, launch, stop and roll back the isolated profile from the Profile page.
+- Import the candidate configuration into the local Pi agent directory after a
+  backup, then verify with `pi --list-models` and roll back from that backup.
 - Keep generated settings, models and launcher at the profile root expected by
   Pi's PI_CODING_AGENT_DIR, while preserving unrelated legacy files.
 - Validate candidate routes against provider credentials, bridge status and
@@ -119,6 +121,6 @@ npm --prefix web run build
 
 Manual verification also requires starting the Manager API and the Vite web
 server, then adding a provider through the UI and confirming that a subsequent
-refresh reads it from the persisted Manager state. Live Pi startup on this
-machine is still gated on having the Pi executable available, so the native
-profile handoff path remains runtime-verified rather than fully exercised here.
+refresh reads it from the persisted Manager state. Importing to the local Pi
+agent directory writes `~/.pi/agent/settings.json` and `models.json` after a
+Manager-owned backup; use `pi --list-models` to confirm the imported catalog.

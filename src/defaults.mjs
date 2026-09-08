@@ -183,6 +183,9 @@ export function createDefaultState({ projectRoot }) {
       lastLaunchPid: null,
       lastStopAt: null,
       lastError: null,
+      lastLiveImportAt: null,
+      lastLiveBackupDir: "",
+      lastLiveVerify: null,
       events: []
     }
   };

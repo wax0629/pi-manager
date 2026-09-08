@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createGateway } from "./gateway.mjs";
 import { createPiAuthProbe } from "./pi-auth.mjs";
+import { applyLivePiConfig, restoreLivePiBackup } from "./pi-apply.mjs";
 import { readPiModelsConfig, resolvePiAgentDir } from "./pi-import.mjs";
 import { sanitizeConnectionTestUrl, testProviderConnection } from "./provider-test.mjs";
 import { writePiProfile } from "./profile.mjs";
@@ -269,6 +270,43 @@ async function publicState({ forceAuth = false } = {}) {
   };
 }
 
+async function applyLivePi() {
+  await ensureCycleListReady();
+  const result = applyLivePiConfig({
+    agentDir: resolvePiAgentDir(),
+    backupRoot: path.join(store.dataDir, "backups"),
+    state: store.get(),
+    credentials: collectProviderCredentials(),
+    piExecutable
+  });
+  store.update((state) => {
+    state.runtime.lastLiveImportAt = new Date().toISOString();
+    state.runtime.lastLiveBackupDir = result.backupDir;
+    state.runtime.lastLiveVerify = {
+      ok: Boolean(result.verify?.ok),
+      error: result.verify?.error || "",
+      refs: Array.isArray(result.verify?.refs) ? result.verify.refs : []
+    };
+    state.runtime.lastError = result.verify?.ok ? null : (result.verify?.error || null);
+  });
+  store.recordEvent("pi", "已导入本机 Pi 配置", result.agentDir);
+  return result;
+}
+
+function rollbackLivePi() {
+  const backupDir = store.get().runtime.lastLiveBackupDir;
+  const result = restoreLivePiBackup({
+    agentDir: resolvePiAgentDir(),
+    backupDir
+  });
+  store.update((state) => {
+    state.runtime.lastLiveImportAt = null;
+    state.runtime.lastError = null;
+  });
+  store.recordEvent("pi", "已回滚本机 Pi 配置", result.backupDir);
+  return result;
+}
+
 function applyProfile() {
   const appliedSnapshot = store.snapshotConfiguration();
   const profile = writePiProfile({
@@ -418,6 +456,16 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
     await ensureCycleListReady();
     const profile = applyProfile();
     sendJson(res, 200, { ok: true, profile, state: await publicState() });
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/pi/live-import") {
+    const result = await applyLivePi();
+    sendJson(res, 200, { ok: true, result, state: await publicState() });
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/pi/live-rollback") {
+    const result = rollbackLivePi();
+    sendJson(res, 200, { ok: true, result, state: await publicState() });
     return;
   }
   if (req.method === "POST" && pathname === "/api/profile/rollback") {

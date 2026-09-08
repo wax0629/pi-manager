@@ -38,6 +38,8 @@ import {
   setProviderCredential,
   launchPi,
   rollbackProfile,
+  rollbackLivePi,
+  importLivePi,
   testProviderConnection,
   stopPi,
   updateCycleList,
@@ -1517,6 +1519,8 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
   const [launching, setLaunching] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
+  const [importingLive, setImportingLive] = useState(false);
+  const [rollingLive, setRollingLive] = useState(false);
   const [actionError, setActionError] = useState('');
 
   const appliedSnapshot = state.runtime.appliedSnapshot as {
@@ -1603,11 +1607,43 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
     }
   };
 
+  const importLiveNow = async () => {
+    if (!window.confirm('将备份并写入本机 ~/.pi/agent 的 settings.json / models.json / auth.json。继续？')) return;
+    setImportingLive(true);
+    setActionError('');
+    try {
+      const response = await importLivePi();
+      const verify = response.state.runtime.lastLiveVerify;
+      onStateChanged(response.state, verify?.ok ? '已导入本机 Pi，可用 pi --list-models 验证' : `已写入本机 Pi，但验证未完全通过：${verify?.error || '未知原因'}`);
+    } catch (caughtError) {
+      setActionError(caughtError instanceof ApiError ? caughtError.message : '导入本机 Pi 失败。');
+    } finally {
+      setImportingLive(false);
+    }
+  };
+
+  const rollbackLiveNow = async () => {
+    if (!state.runtime.lastLiveBackupDir) {
+      setActionError('没有可回滚的本机 Pi 备份。');
+      return;
+    }
+    setRollingLive(true);
+    setActionError('');
+    try {
+      const response = await rollbackLivePi();
+      onStateChanged(response.state, '已回滚本机 Pi 配置');
+    } catch (caughtError) {
+      setActionError(caughtError instanceof ApiError ? caughtError.message : '回滚本机 Pi 失败。');
+    } finally {
+      setRollingLive(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">环境 Profiles</h1>
-        <p className="mt-1 text-[14px] text-surface-500">当前受控 profile 的生成、应用、启动和回滚状态。</p>
+        <p className="mt-1 text-[14px] text-surface-500">隔离 profile 用于试跑；导入本机 Pi 会备份后写入 ~/.pi/agent，供普通 pi 命令验证。</p>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
@@ -1640,10 +1676,14 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
               </dl>
             </div>
           </div>
-          <div className="grid gap-3 border-t border-surface-100 bg-surface-50/50 px-5 py-4 dark:border-surface-800 dark:bg-surface-900/20 md:grid-cols-4">
-            <button type="button" onClick={() => void applyNow()} disabled={applying} className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-wait disabled:opacity-60">
+          <div className="grid gap-3 border-t border-surface-100 bg-surface-50/50 px-5 py-4 dark:border-surface-800 dark:bg-surface-900/20 md:grid-cols-3 xl:grid-cols-6">
+            <button type="button" onClick={() => void applyNow()} disabled={applying} className="inline-flex items-center justify-center rounded-md border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-700 hover:bg-surface-50 disabled:cursor-wait disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800">
               {applying ? <Loader2 size={14} className="mr-2 animate-spin" /> : <CheckCircle2 size={14} className="mr-2" />}
-              应用配置
+              应用隔离 Profile
+            </button>
+            <button type="button" onClick={() => void importLiveNow()} disabled={importingLive} className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-wait disabled:opacity-60">
+              {importingLive ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Download size={14} className="mr-2" />}
+              导入本机 Pi
             </button>
             <button type="button" onClick={() => void launchNow()} disabled={launching} className="inline-flex items-center justify-center rounded-md border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-wait disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
               {launching ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Play size={14} className="mr-2" />}
@@ -1655,7 +1695,11 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
             </button>
             <button type="button" onClick={() => void rollbackNow()} disabled={rollingBack || !state.runtime.appliedSnapshot} className="inline-flex items-center justify-center rounded-md border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
               {rollingBack ? <Loader2 size={14} className="mr-2 animate-spin" /> : <RotateCcw size={14} className="mr-2" />}
-              回滚到上次应用
+              回滚隔离 Profile
+            </button>
+            <button type="button" onClick={() => void rollbackLiveNow()} disabled={rollingLive || !state.runtime.lastLiveBackupDir} className="inline-flex items-center justify-center rounded-md border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
+              {rollingLive ? <Loader2 size={14} className="mr-2 animate-spin" /> : <RotateCcw size={14} className="mr-2" />}
+              回滚本机 Pi
             </button>
           </div>
           {actionError && <div className="mx-5 mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{actionError}</div>}
@@ -1695,6 +1739,14 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
               <div className="flex justify-between gap-4">
                 <span className="text-surface-500">停止时间</span>
                 <span className="font-mono text-surface-900 dark:text-white">{state.runtime.lastStopAt || '尚未停止'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-surface-500">本机 Pi 导入</span>
+                <span className="font-mono text-surface-900 dark:text-white">{state.runtime.lastLiveImportAt || '尚未导入'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-surface-500">本机验证</span>
+                <span className="max-w-[220px] truncate font-mono text-surface-900 dark:text-white" title={state.runtime.lastLiveVerify?.error || ''}>{state.runtime.lastLiveVerify ? (state.runtime.lastLiveVerify.ok ? '通过' : '未完全通过') : '尚未验证'}</span>
               </div>
             </div>
           </div>

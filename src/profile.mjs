@@ -222,4 +222,4 @@ export function writePiProfile({ dataDir, state, piExecutable = "pi", credential
   return { runtimeDir, extensionPath, settingsPath, modelsPath, launcherPath, manifestPath, mode: native ? "native-subscription" : "models-json" };
 }
 
-export { piThinkingMap, shellQuote, toPiModel, providerApiKeyEnvName };
+export { piThinkingMap, shellQuote, toPiModel, providerApiKeyEnvName, buildEnabledModels, buildModelOverrides };
