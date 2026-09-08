@@ -82,6 +82,9 @@ test("profile generation writes an isolated custom provider extension without th
   const extension = fs.readFileSync(profile.extensionPath, "utf8");
   const launcher = fs.readFileSync(profile.launcherPath, "utf8");
 
+  assert.equal(path.dirname(profile.settingsPath), profile.runtimeDir);
+  assert.equal(path.dirname(profile.extensionPath), path.join(profile.runtimeDir, "extensions"));
+  assert.equal(fs.existsSync(path.join(profile.runtimeDir, ".pi", "settings.json")), false);
   assert.equal(settings.defaultProvider, "pi-manager");
   assert.deepEqual(settings.enabledModels, [
     "qiniu/gpt-5.6-luna",
@@ -95,6 +98,26 @@ test("profile generation writes an isolated custom provider extension without th
   assert.equal(launcher.includes("--provider"), true);
   assert.equal(launcher.includes("'demo-model'"), true);
   assert.equal(launcher.includes("test-secret-value"), false);
+});
+
+test("profile migration removes only known legacy Manager files", (t) => {
+  const fixture = makeFixture(t);
+  const legacyDir = path.join(fixture.dataDir, "profiles", "active", ".pi");
+  const legacyExtensionsDir = path.join(legacyDir, "extensions");
+  const sessionsDir = path.join(legacyDir, "sessions");
+  fs.mkdirSync(legacyExtensionsDir, { recursive: true });
+  fs.mkdirSync(sessionsDir, { recursive: true });
+  fs.writeFileSync(path.join(legacyDir, "settings.json"), "{}\n");
+  fs.writeFileSync(path.join(legacyDir, "models.json"), "{}\n");
+  fs.writeFileSync(path.join(legacyExtensionsDir, "pi-manager-provider.ts"), "old\n");
+  fs.writeFileSync(path.join(sessionsDir, "keep.jsonl"), "session\n");
+
+  const store = createStore(fixture);
+  const profile = writePiProfile({ dataDir: fixture.dataDir, state: store.get(), piExecutable: "/usr/bin/pi" });
+
+  assert.equal(fs.existsSync(path.join(profile.runtimeDir, "settings.json")), true);
+  assert.equal(fs.existsSync(path.join(profile.runtimeDir, ".pi", "settings.json")), false);
+  assert.equal(fs.existsSync(path.join(sessionsDir, "keep.jsonl")), true);
 });
 
 test("candidate route rejects unsupported thinking levels", (t) => {
