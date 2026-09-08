@@ -324,6 +324,38 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
       store.recordEvent("model", `已更新 ${provider.name} / ${model.name} Thinking 映射`, source);
       return model;
     },
+    addProviderModel({ providerId, model }) {
+      const provider = store.provider(providerId);
+      if (!provider) throw new Error("渠道不存在");
+      if (!isEditableCustomProvider(provider)) throw new Error("内置渠道不能增删模型");
+      const incoming = typeof model === "string" ? { id: model } : model;
+      const nextModel = normalizeModel(incoming);
+      if (!nextModel) throw new Error("模型 ID 不能为空");
+      if (provider.models.some((item) => item.id === nextModel.id)) throw new Error("模型 ID 已存在");
+      provider.models.push(nextModel);
+      store.touchConfiguration();
+      store.recordEvent("model", `已添加 ${provider.name} / ${nextModel.name}`, nextModel.id);
+      return nextModel;
+    },
+    removeProviderModel({ providerId, modelId }) {
+      const provider = store.provider(providerId);
+      if (!provider) throw new Error("渠道不存在");
+      if (!isEditableCustomProvider(provider)) throw new Error("内置渠道不能增删模型");
+      const normalizedModelId = String(modelId || "").trim();
+      const index = provider.models.findIndex((item) => item.id === normalizedModelId);
+      if (index === -1) throw new Error("模型不存在");
+      if (provider.models.length === 1) throw new Error("至少保留一个模型");
+      if (state.active.providerId === providerId && state.active.modelId === normalizedModelId) {
+        throw new Error("不能删除当前默认模型，请先切换默认模型");
+      }
+      const [removed] = provider.models.splice(index, 1);
+      state.cycle.modelRefs = normalizeCycleModelRefs(
+        state.cycle.modelRefs.filter((ref) => ref !== `${providerId}/${normalizedModelId}`)
+      );
+      store.touchConfiguration();
+      store.recordEvent("model", `已删除 ${provider.name} / ${removed.name}`, normalizedModelId);
+      return removed;
+    },
     updateModelContextWindow({ providerId, modelId, contextWindow }) {
       const provider = store.provider(providerId);
       if (!provider) throw new Error("渠道不存在");

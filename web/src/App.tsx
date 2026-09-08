@@ -27,10 +27,12 @@ import {
 import {
   ApiError,
   applyProfile,
+  addProviderModel,
   createProvider,
   importPiProviders,
   previewPiImport,
   deleteProvider,
+  deleteProviderModel,
   deleteProviderCredential,
   getState,
   setProviderCredential,
@@ -871,6 +873,85 @@ function DeployModal({ state, isOpen, onClose, onApplied }: { state: ManagerStat
   );
 }
 
+function AddCatalogModelModal({ providers, onClose, onSaved }: {
+  providers: ProviderState[];
+  onClose: () => void;
+  onSaved: (state: ManagerState, notice: string) => void;
+}) {
+  const [providerId, setProviderId] = useState(providers[0]?.id || '');
+  const [modelId, setModelId] = useState('');
+  const [name, setName] = useState('');
+  const [reasoning, setReasoning] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!providerId || !modelId.trim()) {
+      setError('请选择自定义渠道并填写模型 ID。');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      const response = await addProviderModel(providerId, {
+        id: modelId.trim(),
+        name: name.trim() || modelId.trim(),
+        reasoning,
+      });
+      onSaved(response.state, `已添加 ${providerId}/${modelId.trim()}`);
+    } catch (caughtError) {
+      setError(caughtError instanceof ApiError ? caughtError.message : '添加模型失败。');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm dark:bg-black/60" role="presentation">
+      <div className="w-full max-w-md overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="add-model-title">
+        <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
+          <div>
+            <h2 id="add-model-title" className="text-[16px] font-bold text-surface-900 dark:text-white">添加模型</h2>
+            <p className="mt-1 text-[12px] text-surface-500">只对自定义 OpenAI 兼容渠道写入完整目录。</p>
+          </div>
+          <button type="button" onClick={onClose} disabled={submitting} title="关闭" aria-label="关闭" className="text-surface-400 hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
+        </div>
+        <form onSubmit={submit}>
+          <div className="space-y-4 p-6">
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">自定义渠道</span>
+              <select value={providerId} onChange={(event) => setProviderId(event.target.value)} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+                {providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.name} · {provider.id}</option>)}
+              </select>
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">模型 ID</span>
+              <input required value={modelId} onChange={(event) => setModelId(event.target.value)} placeholder="例如：gpt-5.6-luna" className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">显示名称 <span className="font-normal text-surface-400">可选</span></span>
+              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="默认使用模型 ID" className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+            </label>
+            <label className="flex items-center gap-2 text-[12px] text-surface-600 dark:text-surface-300">
+              <input type="checkbox" checked={reasoning} onChange={(event) => setReasoning(event.target.checked)} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
+              支持 reasoning / Thinking
+            </label>
+            {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
+          </div>
+          <div className="flex justify-end gap-3 border-t border-surface-100 bg-surface-50 p-5 dark:border-surface-800 dark:bg-surface-900/50">
+            <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">取消</button>
+            <button type="submit" disabled={submitting || providers.length === 0} className="flex items-center rounded-md bg-surface-950 px-5 py-2 text-[13px] font-medium text-white hover:bg-surface-800 disabled:opacity-60 dark:bg-white dark:text-surface-950">
+              {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
+              添加到完整目录
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 type ModelsTab = 'catalog' | 'cycle' | 'default' | 'thinking';
 
 function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateChanged: (nextState: ManagerState, notice: string) => void }) {
@@ -882,6 +963,9 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
   const [savingRoute, setSavingRoute] = useState(false);
   const [routeError, setRouteError] = useState('');
   const [mappingRef, setMappingRef] = useState(`${state.active.providerId}/${state.active.modelId}`);
+  const [showAddModel, setShowAddModel] = useState(false);
+  const [catalogError, setCatalogError] = useState('');
+  const customProviders = state.providers.filter((provider) => isCustomApiProvider(provider));
   const models = useMemo(() => state.providers.flatMap((provider) => provider.models.map((model) => ({ provider, model }))), [state.providers]);
   const visibleModels = models.filter(({ provider, model }) => {
     const value = `${provider.id}/${model.id} ${model.name}`.toLowerCase();
@@ -970,7 +1054,12 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
               <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索模型 ID" aria-label="搜索模型 ID" className="w-full rounded-md border border-surface-200 bg-white py-1.5 pl-8 pr-3 text-[13px] outline-none focus:border-surface-400 dark:border-surface-700 dark:bg-[#0a0a0a] dark:text-white" />
             </div>
-            <span className="text-[12px] text-surface-500">模型元数据和策略可单独调整</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] text-surface-500">自定义渠道可增删完整目录；内置渠道只能改映射和 Context</span>
+              <button type="button" onClick={() => setShowAddModel(true)} disabled={customProviders.length === 0} className="inline-flex h-8 items-center rounded-md border border-surface-200 bg-white px-3 text-[12px] font-medium text-surface-700 hover:bg-surface-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200">
+                <Plus size={13} className="mr-1.5" />添加模型
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-left text-[13px]">
@@ -994,14 +1083,45 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
                     <td className="px-4 py-3 text-[12px] text-surface-500">{thinkingSummary(model)}</td>
                     <td className="px-4 py-3"><ModelContextWindowEditor key={`${provider.id}/${model.id}:${model.contextWindow}`} provider={provider} model={model} onStateChanged={onStateChanged} /></td>
                     <td className="px-4 py-3">{provider.id === state.active.providerId && model.id === state.active.modelId ? <span className="text-primary-600 dark:text-primary-400">默认</span> : provider.status === 'ready' ? <span className="text-surface-400">可用</span> : <span className="text-amber-600 dark:text-amber-400">{statusMeta(provider.status).label}</span>}</td>
-                    <td className="px-4 py-3"><button type="button" onClick={() => { setMappingRef(`${provider.id}/${model.id}`); setActiveTab('thinking'); }} title={`编辑 ${model.name} 的 Thinking 映射`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium text-surface-600 transition-colors hover:bg-surface-100 hover:text-surface-950 dark:text-surface-400 dark:hover:bg-surface-800 dark:hover:text-white"><Pencil size={13} />映射</button></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => { setMappingRef(`${provider.id}/${model.id}`); setActiveTab('thinking'); }} title={`编辑 ${model.name} 的 Thinking 映射`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium text-surface-600 transition-colors hover:bg-surface-100 hover:text-surface-950 dark:text-surface-400 dark:hover:bg-surface-800 dark:hover:text-white"><Pencil size={13} />映射</button>
+                        {isCustomApiProvider(provider) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!window.confirm(`确定从完整目录删除 ${provider.id}/${model.id} 吗？`)) return;
+                              void deleteProviderModel(provider.id, model.id)
+                                .then((response) => { setCatalogError(''); onStateChanged(response.state, `已删除 ${provider.id}/${model.id}`); })
+                                .catch((caughtError) => setCatalogError(caughtError instanceof ApiError ? caughtError.message : '删除模型失败。'));
+                            }}
+                            title={`删除 ${model.name}`}
+                            aria-label={`删除 ${model.name}`}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-surface-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {visibleModels.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-[13px] text-surface-500">没有匹配的模型。</td></tr>}
               </tbody>
             </table>
           </div>
+          {catalogError && <div className="mx-4 mb-4 mt-3 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{catalogError}</div>}
         </div>
+      )}
+      {showAddModel && (
+        <AddCatalogModelModal
+          providers={customProviders}
+          onClose={() => setShowAddModel(false)}
+          onSaved={(nextState, notice) => {
+            onStateChanged(nextState, notice);
+            setShowAddModel(false);
+          }}
+        />
       )}
 
       {activeTab === 'cycle' && (

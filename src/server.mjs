@@ -527,14 +527,29 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
     sendJson(res, 201, { ok: true, provider, state: await publicState() });
     return;
   }
-  if (req.method === "PATCH" && pathname.startsWith("/api/providers/") && !pathname.endsWith("/credential") && !pathname.endsWith("/test")) {
+  if (req.method === "POST" && pathname.startsWith("/api/providers/") && pathname.endsWith("/models")) {
+    const providerId = pathname.split("/")[3];
+    const body = await parseBody(req);
+    store.addProviderModel({ providerId, model: body.model || body });
+    sendJson(res, 201, { ok: true, state: await publicState() });
+    return;
+  }
+  if (req.method === "DELETE" && pathname.startsWith("/api/providers/") && pathname.includes("/models/")) {
+    const parts = pathname.split("/");
+    const providerId = parts[3];
+    const modelId = decodeURIComponent(parts[5] || "");
+    store.removeProviderModel({ providerId, modelId });
+    sendJson(res, 200, { ok: true, state: await publicState() });
+    return;
+  }
+  if (req.method === "PATCH" && pathname.startsWith("/api/providers/") && !pathname.endsWith("/credential") && !pathname.endsWith("/test") && !pathname.endsWith("/models")) {
     const providerId = pathname.split("/")[3];
     const body = await parseBody(req);
     const provider = store.updateProvider(providerId, body);
     sendJson(res, 200, { ok: true, provider, state: await publicState() });
     return;
   }
-  if (req.method === "DELETE" && pathname.startsWith("/api/providers/") && !pathname.endsWith("/credential")) {
+  if (req.method === "DELETE" && pathname.startsWith("/api/providers/") && !pathname.endsWith("/credential") && !pathname.includes("/models/")) {
     const providerId = pathname.split("/")[3];
     store.removeProvider(providerId);
     sendJson(res, 200, { ok: true, state: await publicState() });
