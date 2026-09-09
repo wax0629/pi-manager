@@ -12,6 +12,7 @@ import {
   restoreLivePiBackup
 } from "../src/pi-apply.mjs";
 import { createStore } from "../src/store.mjs";
+import { seedStoreProviders } from "../src/defaults.mjs";
 
 process.env.PI_MANAGER_DISABLE_KEYCHAIN = "1";
 
@@ -57,6 +58,7 @@ test("live import merges settings and models while preserving unrelated fields",
   }, null, 2)}\n`);
 
   const store = createStore({ projectRoot: fixture.projectRoot, dataDir: fixture.dataDir });
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
   store.setCredential("qiniu", "qiniu-live-secret");
   store.addProvider({
     id: "company-relay",
@@ -104,6 +106,7 @@ test("live rollback restores the previous agent files", (t) => {
   fs.mkdirSync(fixture.agentDir, { recursive: true });
   fs.writeFileSync(path.join(fixture.agentDir, "settings.json"), `${JSON.stringify({ defaultProvider: "google" }, null, 2)}\n`);
   const store = createStore({ projectRoot: fixture.projectRoot, dataDir: fixture.dataDir });
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
   store.setCredential("qiniu", "qiniu-live-secret");
   store.setActive({ providerId: "qiniu", modelId: "grok-4.6", thinking: "medium" });
 

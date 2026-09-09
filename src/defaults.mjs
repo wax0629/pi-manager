@@ -119,23 +119,70 @@ const codexModels = [
   }
 ].map(catalogModel);
 
-export function createDefaultState({ projectRoot }) {
+export function createSeedProviders({ projectRoot }) {
   const bridgePath = path.join(projectRoot, "antigravity-bridge");
+  return [
+    {
+      id: "qiniu",
+      name: "七牛云",
+      kind: "openai-api",
+      baseUrl: "https://llmapi.qiniu.io/v1",
+      credentialEnv: "QINIU_API_KEY",
+      description: "OpenAI 兼容 API",
+      models: qiniuModels
+    },
+    {
+      id: "antigravity",
+      name: "Google Antigravity",
+      kind: "local-bridge",
+      baseUrl: "http://127.0.0.1:8045/v1",
+      bridgePath,
+      credentialEnv: "API_KEY",
+      description: "本地订阅桥接",
+      models: antigravityModels
+    },
+    {
+      id: "openai-codex",
+      name: "OpenAI Codex",
+      kind: "native-subscription",
+      piProvider: "openai-codex",
+      description: "Pi 原生官方订阅",
+      models: codexModels
+    }
+  ];
+}
 
-  return {
-    version: 1,
-    targetProject: projectRoot,
-    active: {
+export function seedStoreProviders(store, { projectRoot } = {}) {
+  const root = projectRoot || store.get().targetProject;
+  store.update((state) => {
+    state.providers = createSeedProviders({ projectRoot: root });
+    state.active = {
       providerId: "qiniu",
       modelId: "gpt-5.6-luna",
       thinking: "medium"
-    },
-    cycle: {
+    };
+    state.cycle = {
       modelRefs: [
         "qiniu/gpt-5.6-luna",
         "openai-codex/gpt-5.6-luna",
         "qiniu/gpt-5.6-sol"
       ]
+    };
+  });
+  return store;
+}
+
+export function createDefaultState({ projectRoot }) {
+  return {
+    version: 1,
+    targetProject: projectRoot,
+    active: {
+      providerId: "",
+      modelId: "",
+      thinking: "off"
+    },
+    cycle: {
+      modelRefs: []
     },
     gateway: {
       enabled: true,
@@ -143,35 +190,7 @@ export function createDefaultState({ projectRoot }) {
       port: 8675,
       clientKey: crypto.randomBytes(24).toString("base64url")
     },
-    providers: [
-      {
-        id: "qiniu",
-        name: "七牛云",
-        kind: "openai-api",
-        baseUrl: "https://llmapi.qiniu.io/v1",
-        credentialEnv: "QINIU_API_KEY",
-        description: "OpenAI 兼容 API",
-        models: qiniuModels
-      },
-      {
-        id: "antigravity",
-        name: "Google Antigravity",
-        kind: "local-bridge",
-        baseUrl: "http://127.0.0.1:8045/v1",
-        bridgePath,
-        credentialEnv: "API_KEY",
-        description: "本地订阅桥接",
-        models: antigravityModels
-      },
-      {
-        id: "openai-codex",
-        name: "OpenAI Codex",
-        kind: "native-subscription",
-        piProvider: "openai-codex",
-        description: "Pi 原生官方订阅",
-        models: codexModels
-      }
-    ],
+    providers: [],
     runtime: {
       profilePath: "",
       extensionPath: "",

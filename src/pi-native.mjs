@@ -94,15 +94,17 @@ export function createNativeAuth({
     return runtimePromise;
   }
 
-  async function listNativeProviders() {
+  async function listNativeProviders({ featured = false } = {}) {
     const runtime = await getRuntime();
     const configured = new Set((await runtime.listCredentials?.() || []).map((item) => item.providerId));
-    const featured = new Set(FEATURED_NATIVE_PROVIDERS);
+    const featuredIds = new Set(FEATURED_NATIVE_PROVIDERS);
     return runtime.getProviders()
       .filter((provider) => {
         const methods = providerAuthMethods(provider);
         if (methods.length === 0) return false;
-        return featured.has(provider.id) || configured.has(provider.id) || Boolean(runtime.getProviderAuthStatus?.(provider.id)?.configured);
+        const isConfigured = configured.has(provider.id) || Boolean(runtime.getProviderAuthStatus?.(provider.id)?.configured);
+        if (featured) return featuredIds.has(provider.id);
+        return featuredIds.has(provider.id) && isConfigured;
       })
       .map((provider) => summarizeNativeProvider(runtime, provider));
   }
@@ -228,6 +230,7 @@ export function createNativeAuth({
   return {
     getRuntime,
     listNativeProviders,
+    listFeaturedNativeProviders: () => listNativeProviders({ featured: true }),
     login,
     loginStatus,
     answerPrompt,

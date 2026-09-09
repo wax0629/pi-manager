@@ -30,6 +30,7 @@ import {
   addProviderModel,
   createProvider,
   importPiProviders,
+  listFeaturedNativeProviders,
   previewPiImport,
   deleteProvider,
   deleteProviderModel,
@@ -68,10 +69,8 @@ import type {
 
 type NavId = 'providers' | 'models' | 'profiles' | 'diagnostics';
 
-const BUILTIN_PROVIDER_IDS = ['qiniu', 'antigravity', 'openai-codex'] as const;
-
 function isCustomApiProvider(provider: ProviderState) {
-  return provider.kind === 'openai-api' && !BUILTIN_PROVIDER_IDS.includes(provider.id as typeof BUILTIN_PROVIDER_IDS[number]);
+  return provider.kind === 'openai-api';
 }
 
 function canConfigureCredential(provider: ProviderState) {
@@ -239,10 +238,16 @@ function Topbar({ state, onDeploy, onRefresh, refreshing }: { state: ManagerStat
       <div className="flex min-w-0 items-center text-[13px] font-medium text-surface-500">
         <LayoutDashboard size={15} className="mr-2 shrink-0 text-surface-400" />
         <span className="truncate">{projectName(state.targetProject)}</span>
-        <span className="mx-2 text-surface-300 dark:text-surface-700">/</span>
-        <span className="truncate text-surface-900 dark:text-white">{state.active.providerName}</span>
-        <span className="mx-2 text-surface-300 dark:text-surface-700">/</span>
-        <span className="truncate font-mono text-[12px] text-surface-500">{state.active.modelId}</span>
+        {state.active.providerId ? (
+          <>
+            <span className="mx-2 text-surface-300 dark:text-surface-700">/</span>
+            <span className="truncate text-surface-900 dark:text-white">{state.active.providerName}</span>
+            <span className="mx-2 text-surface-300 dark:text-surface-700">/</span>
+            <span className="truncate font-mono text-[12px] text-surface-500">{state.active.modelId}</span>
+          </>
+        ) : (
+          <span className="ml-2 text-surface-400">· 尚未配置模型</span>
+        )}
       </div>
       <div className="ml-4 flex shrink-0 items-center gap-3">
         {state.runtime.lastError && (
@@ -435,7 +440,7 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
   );
 }
 
-function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest, onCredential, onLogin, onLogout, onEdit, onDelete }: {
+function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest, onCredential, onLogin, onLogout, onEdit, onDelete, onNativeLogin }: {
   state: ManagerState;
   testResults: Record<string, ProviderConnectionTestResult>;
   onAdd: () => void;
@@ -447,9 +452,11 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
   onLogout: (provider: ProviderState) => void;
   onEdit: (provider: ProviderState) => void;
   onDelete: (provider: ProviderState) => void;
+  onNativeLogin: () => void;
 }) {
   const [filter, setFilter] = useState<'all' | 'ready' | 'native'>('all');
   const [query, setQuery] = useState('');
+  const isTrulyEmpty = state.providers.length === 0 && !query.trim();
   const visibleProviders = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return state.providers.filter((provider) => {
@@ -479,6 +486,14 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
           >
             <Download size={16} className="mr-2 opacity-70" />
             从本机 Pi 导入
+          </button>
+          <button
+            type="button"
+            onClick={onNativeLogin}
+            className="flex h-9 items-center rounded-md border border-surface-200 bg-white px-4 text-[13px] font-medium text-surface-700 shadow-sm transition-colors hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200 dark:hover:bg-surface-800"
+          >
+            <KeyRound size={16} className="mr-2 opacity-70" />
+            登录原生渠道
           </button>
           <button
             type="button"
@@ -539,6 +554,19 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
               onDelete={() => onDelete(provider)}
             />
           ))}
+        </div>
+      ) : isTrulyEmpty ? (
+        <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-surface-300 bg-white/60 px-6 text-center dark:border-surface-800 dark:bg-[#0a0a0a]/60">
+          <Server size={22} className="mb-3 text-surface-400" />
+          <h2 className="text-[14px] font-medium text-surface-900 dark:text-white">还没有任何供应商</h2>
+          <p className="mt-1 text-[13px] text-surface-500">从本机 Pi 勾选导入，或新增 API 中转，或登录原生渠道。</p>
+          <div className="mt-4 flex items-center gap-2">
+            <button type="button" onClick={onImport} className="flex h-9 items-center rounded-md bg-surface-950 px-4 text-[13px] font-medium text-white hover:bg-surface-800 dark:bg-white dark:text-surface-950 dark:hover:bg-surface-200">
+              <Download size={15} className="mr-2 opacity-70" />
+              从本机 Pi 导入
+            </button>
+            <button type="button" onClick={onNativeLogin} className="flex h-9 items-center rounded-md border border-surface-200 bg-white px-4 text-[13px] font-medium text-surface-700 hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200">登录原生渠道</button>
+          </div>
         </div>
       ) : (
         <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-surface-300 bg-white/60 text-center dark:border-surface-800 dark:bg-[#0a0a0a]/60">
@@ -666,6 +694,7 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
   onSaved: (state: ManagerState, notice: string) => void;
 }) {
   const [preview, setPreview] = useState<PiImportPreview | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -675,6 +704,7 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
     let cancelled = false;
     setLoading(true);
     setError('');
+    setSelectedIds([]);
     void previewPiImport()
       .then((response) => {
         if (!cancelled) setPreview(response.preview);
@@ -692,11 +722,18 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
 
   if (!isOpen) return null;
 
+  const toggleSelected = (id: string) => {
+    setSelectedIds((current) => current.includes(id)
+      ? current.filter((item) => item !== id)
+      : [...current, id]);
+    setError('');
+  };
+
   const importNow = async (overwrite: boolean) => {
     setSubmitting(true);
     setError('');
     try {
-      const response = await importPiProviders(overwrite);
+      const response = await importPiProviders(overwrite, selectedIds);
       onSaved(response.state, `已导入 ${response.result.imported.length} 个本机 Pi 渠道`);
       onClose();
     } catch (caughtError) {
@@ -726,14 +763,25 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
               ) : (
                 <ul className="space-y-2">
                   {preview.candidates.map((candidate) => (
-                    <li key={candidate.id} className="rounded-md border border-surface-200 px-3 py-2 text-[12px] dark:border-surface-800">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="font-medium text-surface-900 dark:text-white">{candidate.name}</span>
-                        <span className="font-mono text-surface-400">{candidate.id}</span>
-                      </div>
-                      <div className="mt-1 truncate font-mono text-[11px] text-surface-500">{candidate.baseUrl}</div>
-                      <div className="mt-1 text-surface-500">{candidate.models.length} 个模型 · {candidate.credentialKind === 'literal' ? '将导入密钥到 Manager 凭据存储' : candidate.credentialKind === 'env' ? `引用 ${candidate.credentialEnv}` : '未配置密钥'}</div>
-                      {candidate.conflict && <div className="mt-1 text-amber-600 dark:text-amber-400">与现有渠道冲突：{candidate.existingName || candidate.id}</div>}
+                    <li key={candidate.id}>
+                      <label className="flex cursor-pointer items-start gap-3 rounded-md border border-surface-200 px-3 py-2 text-[12px] dark:border-surface-800">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(candidate.id)}
+                          onChange={() => toggleSelected(candidate.id)}
+                          aria-label={`导入 ${candidate.name}`}
+                          className="mt-1 h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-3">
+                            <span className="font-medium text-surface-900 dark:text-white">{candidate.name}</span>
+                            <span className="font-mono text-surface-400">{candidate.id}</span>
+                          </span>
+                          <span className="mt-1 block truncate font-mono text-[11px] text-surface-500">{candidate.baseUrl}</span>
+                          <span className="mt-1 block text-surface-500">{candidate.models.length} 个模型 · {candidate.credentialKind === 'literal' ? '将导入密钥到 Manager 凭据存储' : candidate.credentialKind === 'env' ? `引用 ${candidate.credentialEnv}` : '未配置密钥'}</span>
+                          {candidate.conflict && <span className="mt-1 block text-amber-600 dark:text-amber-400">与现有渠道冲突：{candidate.existingName || candidate.id}</span>}
+                        </span>
+                      </label>
                     </li>
                   ))}
                 </ul>
@@ -745,12 +793,12 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
         </div>
         <div className="flex justify-end gap-3 border-t border-surface-100 bg-surface-50 p-5 dark:border-surface-800 dark:bg-surface-900/50">
           <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 transition-colors hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">取消</button>
-          {preview && preview.conflicts.length > 0 && (
-            <button type="button" onClick={() => void importNow(true)} disabled={submitting || preview.candidates.length === 0} className="rounded-md border border-amber-200 px-4 py-2 text-[13px] font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-500/30 dark:text-amber-300 dark:hover:bg-amber-500/10">覆盖冲突并导入</button>
+          {preview && preview.candidates.some((candidate) => candidate.conflict && selectedIds.includes(candidate.id)) && (
+            <button type="button" onClick={() => void importNow(true)} disabled={submitting || selectedIds.length === 0} className="rounded-md border border-amber-200 px-4 py-2 text-[13px] font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-500/30 dark:text-amber-300 dark:hover:bg-amber-500/10">覆盖冲突并导入</button>
           )}
-          <button type="button" onClick={() => void importNow(false)} disabled={submitting || !preview || preview.candidates.length === 0} className="flex items-center rounded-md bg-surface-950 px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-surface-800 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-surface-950 dark:hover:bg-surface-200">
+          <button type="button" onClick={() => void importNow(false)} disabled={submitting || !preview || selectedIds.length === 0} className="flex items-center rounded-md bg-surface-950 px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-surface-800 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-surface-950 dark:hover:bg-surface-200">
             {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
-            导入
+            {selectedIds.length > 0 ? `导入 ${selectedIds.length} 个` : '导入'}
           </button>
         </div>
       </div>
@@ -764,15 +812,18 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (state: ManagerState, notice: string) => void;
 }) {
-  const methods = provider?.authMethods?.length
-    ? provider.authMethods
-    : (['oauth', 'api_key'] as Array<'oauth' | 'api_key'>);
-  const [authType, setAuthType] = useState<'oauth' | 'api_key'>(methods.includes('oauth') ? 'oauth' : 'api_key');
+  const [authType, setAuthType] = useState<'oauth' | 'api_key'>('oauth');
   const [apiKey, setApiKey] = useState('');
   const [promptValue, setPromptValue] = useState('');
   const [login, setLogin] = useState<NativeLoginState | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [featured, setFeatured] = useState<ProviderState[]>([]);
+  const [featuredLoading, setFeaturedLoading] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<ProviderState | null>(provider || null);
+  const methods = (selectedProvider || provider)?.authMethods?.length
+    ? (selectedProvider || provider)!.authMethods!
+    : (['oauth', 'api_key'] as Array<'oauth' | 'api_key'>);
 
   useEffect(() => {
     if (!isOpen) {
@@ -781,8 +832,28 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
       setPromptValue('');
       setError('');
       setSubmitting(false);
-      setAuthType(methods.includes('oauth') ? 'oauth' : 'api_key');
+      setSelectedProvider(provider || null);
+      setAuthType('oauth');
     }
+  }, [isOpen, provider?.id]);
+
+  useEffect(() => {
+    if (!isOpen || provider) return;
+    let cancelled = false;
+    setFeaturedLoading(true);
+    void listFeaturedNativeProviders()
+      .then((response) => {
+        if (!cancelled) setFeatured(response.providers);
+      })
+      .catch((caughtError) => {
+        if (!cancelled) setError(caughtError instanceof ApiError ? caughtError.message : '无法读取原生渠道列表。');
+      })
+      .finally(() => {
+        if (!cancelled) setFeaturedLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen, provider?.id]);
 
   useEffect(() => {
@@ -809,10 +880,15 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
     };
   }, [isOpen, login?.loginId, login?.status, provider?.name]);
 
-  if (!isOpen || !provider) return null;
+  if (!isOpen) return null;
+  const activeProvider = selectedProvider || provider || null;
 
   const startLogin = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
+    if (!activeProvider) {
+      setError('请先选择要登录的原生渠道。');
+      return;
+    }
     if (authType === 'api_key' && !apiKey.trim()) {
       setError('API Key 不能为空。');
       return;
@@ -821,13 +897,13 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
     setError('');
     try {
       const response = await startNativeLogin({
-        providerId: provider.id,
+        providerId: activeProvider.id,
         type: authType,
         apiKey: authType === 'api_key' ? apiKey.trim() : undefined,
       });
       setLogin(response.login);
       if (response.login.status === 'completed') {
-        onSaved(response.state, `${provider.name} 已登录`);
+        onSaved(response.state, `${activeProvider.name} 已登录`);
         onClose();
       }
       if (response.login.status === 'error') setError(response.login.error || '登录失败。');
@@ -863,13 +939,22 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
         <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
           <div>
             <h2 id="native-login-title" className="text-[16px] font-bold text-surface-900 dark:text-white">登录 Pi 原生渠道</h2>
-            <p className="mt-1 text-[12px] text-surface-500">{provider.name} · {provider.id}</p>
+            <p className="mt-1 text-[12px] text-surface-500">{activeProvider ? `${activeProvider.name} · ${activeProvider.id}` : '选择要登录的原生渠道'}</p>
           </div>
           <button type="button" onClick={onClose} disabled={submitting} title="关闭" aria-label="关闭" className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
         </div>
         <div className="space-y-4 p-6">
           <div className="rounded-md bg-surface-50 px-3 py-2 text-[12px] text-surface-500 dark:bg-surface-900/50">凭据写入本机 Pi 的 auth.json，不复制 refresh token，也不在 Manager 状态里保存明文。</div>
-          {!login && methods.length > 1 && (
+          {!login && !provider && (
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">原生渠道</span>
+              <select value={selectedProvider?.id || ''} onChange={(event) => { setSelectedProvider(featured.find((item) => item.id === event.target.value) || null); setAuthType('oauth'); setError(''); }} disabled={featuredLoading} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+                <option value="">{featuredLoading ? '正在读取…' : '请选择'}</option>
+                {featured.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.id}</option>)}
+              </select>
+            </label>
+          )}
+          {!login && activeProvider && methods.length > 1 && (
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">登录方式</span>
               <select value={authType} onChange={(event) => setAuthType(event.target.value as 'oauth' | 'api_key')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
@@ -2055,7 +2140,7 @@ function App() {
   const [connectionTests, setConnectionTests] = useState<Record<string, ProviderConnectionTestResult>>({});
   const [editingProvider, setEditingProvider] = useState<ProviderState | null | undefined>(undefined);
   const [credentialProvider, setCredentialProvider] = useState<ProviderState | null>(null);
-  const [loginProvider, setLoginProvider] = useState<ProviderState | null>(null);
+  const [loginProvider, setLoginProvider] = useState<ProviderState | null | undefined>(undefined);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showDeployModal, setShowDeployModal] = useState(false);
 
@@ -2149,7 +2234,7 @@ function App() {
           <div className="mx-auto max-w-[1200px] pb-20">
             {error && <div className="mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
             {notice && <div className="mb-5 flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={14} className="mr-2" />{notice}</div>}
-            {activeNav === 'providers' && <ProvidersPage state={state} testResults={connectionTests} onAdd={() => setEditingProvider(null)} onImport={() => setShowImportModal(true)} onRefresh={() => void refreshState()} onTest={(provider) => void handleTestProvider(provider)} onCredential={(provider) => setCredentialProvider(provider)} onLogin={(provider) => setLoginProvider(provider)} onLogout={(provider) => void handleLogoutProvider(provider)} onEdit={(provider) => setEditingProvider(provider)} onDelete={(provider) => void handleDeleteProvider(provider)} />}
+            {activeNav === 'providers' && <ProvidersPage state={state} testResults={connectionTests} onAdd={() => setEditingProvider(null)} onImport={() => setShowImportModal(true)} onRefresh={() => void refreshState()} onTest={(provider) => void handleTestProvider(provider)} onCredential={(provider) => setCredentialProvider(provider)} onLogin={(provider) => setLoginProvider(provider)} onNativeLogin={() => setLoginProvider(null)} onLogout={(provider) => void handleLogoutProvider(provider)} onEdit={(provider) => setEditingProvider(provider)} onDelete={(provider) => void handleDeleteProvider(provider)} />}
             {activeNav === 'models' && <ModelsPage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
             {activeNav === 'profiles' && <ProfilePage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
             {activeNav === 'diagnostics' && <DiagnosticsPage state={state} />}
@@ -2158,7 +2243,7 @@ function App() {
       </main>
       <ProviderEditorModal key={editingProvider === undefined ? 'closed' : editingProvider?.id || 'create'} provider={editingProvider} isOpen={editingProvider !== undefined} onClose={() => setEditingProvider(undefined)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
       <ImportPiModal key={showImportModal ? 'import-open' : 'import-closed'} isOpen={showImportModal} onClose={() => setShowImportModal(false)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
-      <NativeLoginModal key={loginProvider?.id || 'login-closed'} provider={loginProvider} isOpen={Boolean(loginProvider)} onClose={() => setLoginProvider(null)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
+      <NativeLoginModal key={loginProvider === undefined ? 'login-closed' : loginProvider?.id || 'login-picker'} provider={loginProvider} isOpen={loginProvider !== undefined} onClose={() => setLoginProvider(undefined)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
       <CredentialModal key={credentialProvider?.id || 'credential-closed'} provider={credentialProvider} isOpen={Boolean(credentialProvider)} onClose={() => setCredentialProvider(null)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
       <DeployModal key={showDeployModal ? 'open' : 'closed'} state={state} isOpen={showDeployModal} onClose={() => setShowDeployModal(false)} onApplied={(nextState) => { setState(nextState); setNotice('配置已应用'); setError(''); }} />
     </div>

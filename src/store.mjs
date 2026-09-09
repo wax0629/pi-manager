@@ -33,9 +33,7 @@ function isBuiltinProviderId(providerId) {
 }
 
 function isEditableCustomProvider(provider) {
-  return Boolean(provider)
-    && provider.kind === "openai-api"
-    && !isBuiltinProviderId(provider.id);
+  return Boolean(provider) && provider.kind === "openai-api";
 }
 
 function canConfigureProviderCredential(provider) {
@@ -330,7 +328,7 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
     addProviderModel({ providerId, model }) {
       const provider = store.provider(providerId);
       if (!provider) throw new Error("渠道不存在");
-      if (!isEditableCustomProvider(provider)) throw new Error("内置渠道不能增删模型");
+      if (!isEditableCustomProvider(provider)) throw new Error("只有 OpenAI 兼容 API 渠道可以增删模型");
       const incoming = typeof model === "string" ? { id: model } : model;
       const nextModel = normalizeModel(incoming);
       if (!nextModel) throw new Error("模型 ID 不能为空");
@@ -343,7 +341,7 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
     removeProviderModel({ providerId, modelId }) {
       const provider = store.provider(providerId);
       if (!provider) throw new Error("渠道不存在");
-      if (!isEditableCustomProvider(provider)) throw new Error("内置渠道不能增删模型");
+      if (!isEditableCustomProvider(provider)) throw new Error("只有 OpenAI 兼容 API 渠道可以增删模型");
       const normalizedModelId = String(modelId || "").trim();
       const index = provider.models.findIndex((item) => item.id === normalizedModelId);
       if (index === -1) throw new Error("模型不存在");
@@ -429,7 +427,7 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
     } = {}) {
       const provider = store.provider(providerId);
       if (!provider) throw new Error("渠道不存在");
-      if (!isEditableCustomProvider(provider)) throw new Error("内置渠道不能编辑");
+      if (!isEditableCustomProvider(provider)) throw new Error("只有 OpenAI 兼容 API 渠道可以编辑");
 
       const nextName = name === undefined ? provider.name : String(name || "").trim();
       if (!nextName) throw new Error("渠道名称不能为空");
@@ -489,8 +487,23 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
       store.recordEvent("provider", `已更新渠道 ${nextName}`, provider.id);
       return provider;
     },
+    removeNativeProvider(providerId) {
+      const existing = store.provider(providerId);
+      if (!existing || existing.kind !== "native-subscription") return false;
+      state.providers = state.providers.filter((provider) => provider.id !== providerId);
+      state.cycle.modelRefs = normalizeCycleModelRefs(
+        state.cycle.modelRefs.filter((ref) => !String(ref).startsWith(`${providerId}/`))
+      );
+      if (state.active.providerId === providerId) {
+        state.active = { providerId: "", modelId: "", thinking: "off" };
+      }
+      store.touchConfiguration();
+      store.recordEvent("provider", `已移除 Pi 原生渠道 ${existing.name}`, providerId);
+      return true;
+    },
     removeProvider(providerId) {
-      if (isBuiltinProviderId(providerId)) throw new Error("内置渠道不能删除");
+      const existing = store.provider(providerId);
+      if (existing?.kind === "native-subscription") throw new Error("原生订阅渠道不能从这里删除，请先退出登录");
       if (state.active.providerId === providerId) throw new Error("当前渠道正在使用，请先切换");
       const index = state.providers.findIndex((provider) => provider.id === providerId);
       if (index === -1) throw new Error("渠道不存在");
@@ -532,15 +545,27 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
       store.recordEvent("provider", `已接入 Pi 原生渠道 ${provider.name}`, provider.id);
       return provider;
     },
-    importPiProviders({ modelsConfig, overwrite = false } = {}) {
+    importPiProviders({ modelsConfig, overwrite = false, providerIds } = {}) {
+      const selectedIds = Array.isArray(providerIds)
+        ? [...new Set(providerIds.map((id) => String(id || "").trim()).filter(Boolean))]
+        : [];
+      if (!selectedIds.length) throw new Error("请先勾选要导入的渠道");
       const preview = store.previewPiImport(modelsConfig);
-      if (!overwrite && preview.conflicts.length > 0) {
-        const ids = preview.conflicts.map((item) => item.id).join(", ");
+      const selected = preview.candidates.filter((item) => selectedIds.includes(item.id));
+      if (!selected.length) throw new Error("勾选的渠道不可导入");
+      const selectedConflicts = selected.filter((item) => item.conflict);
+      if (!overwrite && selectedConflicts.length > 0) {
+        const ids = selectedConflicts.map((item) => item.id).join(", ");
         throw new Error(`以下渠道已存在，需确认后才能覆盖: ${ids}`);
       }
       const imported = [];
       const skipped = [...preview.skipped];
-      for (const candidate of preview.candidates) {
+      for (const id of selectedIds) {
+        if (!preview.candidates.some((item) => item.id === id)) {
+          skipped.push({ id, reason: "not-selected-or-unavailable" });
+        }
+      }
+      for (const candidate of selected) {
         const source = modelsConfig?.providers?.[candidate.id];
         if (!source) continue;
         const summary = summarizePiProvider(candidate.id, source);
@@ -580,7 +605,7 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
         store.touchConfiguration();
         store.recordEvent("provider", `已从本机 Pi 导入 ${imported.length} 个渠道`, imported.join(", "));
       }
-      return { imported, skipped, conflicts: preview.conflicts, modelsPath: preview.modelsPath };
+      return { imported, skipped, conflicts: selectedConflicts, modelsPath: preview.modelsPath };
     }
   };
 
