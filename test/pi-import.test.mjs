@@ -70,6 +70,30 @@ test("preview lists openai-compatible providers and skips native overrides", (t)
   assert.equal(preview.skipped.some((item) => item.id === "openai-codex"), true);
 });
 
+test("import requires explicit provider selection", (t) => {
+  const fixture = makeFixture(t);
+  writeModels(fixture.agentDir, {
+    first: {
+      baseUrl: "https://first.example.test/v1",
+      api: "openai-completions",
+      models: [{ id: "first-model" }]
+    },
+    second: {
+      baseUrl: "https://second.example.test/v1",
+      api: "openai-completions",
+      models: [{ id: "second-model" }]
+    }
+  });
+  const store = createStore({ projectRoot: fixture.projectRoot, dataDir: fixture.dataDir });
+  const modelsConfig = readPiModelsConfig(fixture.agentDir);
+
+  assert.throws(() => store.importPiProviders({ modelsConfig }), /请先勾选要导入的渠道/);
+  const result = store.importPiProviders({ modelsConfig, providerIds: ["second"] });
+  assert.deepEqual(result.imported, ["second"]);
+  assert.equal(store.provider("first"), undefined);
+  assert.equal(store.provider("second").models[0].id, "second-model");
+});
+
 test("import copies openai-compatible catalogs without writing secrets into state.json", (t) => {
   const fixture = makeFixture(t);
   const modelsPath = writeModels(fixture.agentDir, {
@@ -100,10 +124,14 @@ test("import copies openai-compatible catalogs without writing secrets into stat
 
   assert.throws(
     () => store.importPiProviders({ modelsConfig, overwrite: false }),
-    /已存在/
+    /请先勾选要导入的渠道/
+  );
+  assert.throws(
+    () => store.importPiProviders({ modelsConfig, overwrite: false, providerIds: [] }),
+    /请先勾选要导入的渠道/
   );
 
-  const result = store.importPiProviders({ modelsConfig, overwrite: true });
+  const result = store.importPiProviders({ modelsConfig, overwrite: true, providerIds: ["company-relay", "antigravity"] });
   assert.equal(result.imported.includes("company-relay"), true);
   assert.equal(result.imported.includes("antigravity"), true);
 

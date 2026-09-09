@@ -243,15 +243,14 @@ async function providerPublicState(provider, { forceAuth = false, nativeSummary 
   };
 }
 
-async function mergeNativeProviders(providers, { forceAuth = false } = {}) {
+async function mergeNativeProviders(providers) {
   let nativeSummaries = [];
   try {
     nativeSummaries = await nativeAuth.listNativeProviders();
   } catch {
     return providers;
   }
-  const byId = new Map(providers.map((provider) => [provider.id, provider]));
-  const merged = await Promise.all(providers.map((provider) => {
+  return providers.map((provider) => {
     const summary = nativeSummaries.find((item) => item.id === provider.id);
     if (!summary || provider.kind !== "native-subscription") return provider;
     return {
@@ -261,24 +260,13 @@ async function mergeNativeProviders(providers, { forceAuth = false } = {}) {
       detail: summary.authLabel || provider.detail,
       authMethods: summary.authMethods
     };
-  }));
-  for (const summary of nativeSummaries) {
-    if (byId.has(summary.id)) continue;
-    merged.push({
-      ...summary,
-      credentialConfigured: summary.credentialConfigured,
-      status: summary.credentialConfigured ? "ready" : "not-configured",
-      detail: summary.authLabel || (summary.credentialConfigured ? "Pi 原生认证已就绪" : "尚未完成 Pi 原生授权")
-    });
-  }
-  return merged;
+  });
 }
 
 async function publicState({ forceAuth = false } = {}) {
   const current = store.get();
   const providers = await mergeNativeProviders(
-    await Promise.all(current.providers.map((provider) => providerPublicState(provider, { forceAuth }))),
-    { forceAuth }
+    await Promise.all(current.providers.map((provider) => providerPublicState(provider, { forceAuth })))
   );
   const activeProvider = providers.find((provider) => provider.id === current.active.providerId);
   const activeModel = activeProvider?.models.find((model) => model.id === current.active.modelId);
@@ -544,6 +532,7 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
   if (req.method === "POST" && pathname === "/api/pi/logout") {
     const body = await parseBody(req);
     const result = await nativeAuth.logout(body.providerId);
+    store.removeNativeProvider(body.providerId);
     piAuthProbe.clear(body.providerId);
     sendJson(res, 200, { ok: true, result, state: await publicState({ forceAuth: true }) });
     return;
@@ -644,6 +633,10 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
     sendJson(res, 200, { ok: true, state: await publicState() });
     return;
   }
+  if (req.method === "GET" && pathname === "/api/pi/native-providers") {
+    sendJson(res, 200, { ok: true, providers: await nativeAuth.listFeaturedNativeProviders() });
+    return;
+  }
   if (req.method === "GET" && pathname === "/api/pi/import") {
     const modelsConfig = readPiModelsConfig(resolvePiAgentDir());
     sendJson(res, 200, { ok: true, preview: store.previewPiImport(modelsConfig) });
@@ -654,7 +647,8 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
     const modelsConfig = readPiModelsConfig(resolvePiAgentDir());
     const result = store.importPiProviders({
       modelsConfig,
-      overwrite: Boolean(body.overwrite)
+      overwrite: Boolean(body.overwrite),
+      providerIds: body.providerIds
     });
     sendJson(res, 200, { ok: true, result, state: await publicState() });
     return;

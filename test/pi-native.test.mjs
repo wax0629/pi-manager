@@ -9,6 +9,7 @@ function fakeSdk({ providers, loginImpl }) {
         return {
           getProviders: () => providers,
           getProvider: (id) => providers.find((provider) => provider.id === id),
+          getRegisteredNativeProvider: (id) => providers.find((provider) => provider.id === id && provider.native !== false),
           getModels: (id) => providers.find((provider) => provider.id === id)?.models || [],
           getProviderAuthStatus: (id) => ({
             configured: Boolean(providers.find((provider) => provider.id === id)?.configured),
@@ -44,11 +45,36 @@ test("lists featured native providers and their auth methods", async () => {
   const nativeAuth = createNativeAuth({
     loadSdk: async () => fakeSdk({ providers: [openaiCodex, { id: "obscure", name: "Obscure", auth: { apiKey: {} }, models: [] }] })
   });
-  const providers = await nativeAuth.listNativeProviders();
+  const providers = await nativeAuth.listFeaturedNativeProviders();
   assert.equal(providers.some((provider) => provider.id === "openai-codex"), true);
   assert.deepEqual(providers.find((provider) => provider.id === "openai-codex").authMethods, ["oauth", "api_key"]);
   assert.equal(providers.some((provider) => provider.id === "obscure"), false);
   assert.equal(FEATURED_NATIVE_PROVIDERS.includes("openai-codex"), true);
+});
+
+test("default native listing only shows configured providers", async () => {
+  const nativeAuth = createNativeAuth({
+    loadSdk: async () => fakeSdk({ providers: [{ ...openaiCodex, configured: false }] })
+  });
+  const providers = await nativeAuth.listNativeProviders();
+  assert.equal(providers.some((provider) => provider.id === "openai-codex"), false);
+});
+
+test("models.json providers are not treated as native subscription cards", async () => {
+  const antigravity = {
+    id: "antigravity",
+    name: "Google Antigravity",
+    configured: true,
+    native: false,
+    auth: { apiKey: { login: async () => ({ type: "api_key" }) } },
+    models: [{ id: "gemini-3.8-flash-tiered" }]
+  };
+  const nativeAuth = createNativeAuth({
+    loadSdk: async () => fakeSdk({ providers: [antigravity] })
+  });
+
+  assert.deepEqual(await nativeAuth.listNativeProviders(), []);
+  assert.deepEqual(await nativeAuth.listFeaturedNativeProviders(), []);
 });
 
 test("api key login rejects empty keys and completes with a provided key", async () => {

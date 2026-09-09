@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { writePiProfile } from "../src/profile.mjs";
 import { createStore } from "../src/store.mjs";
+import { seedStoreProviders } from "../src/defaults.mjs";
 import { getSupportedThinkingLevels } from "../src/thinking.mjs";
 
 process.env.PI_MANAGER_DISABLE_KEYCHAIN = "1";
@@ -17,6 +18,20 @@ function makeFixture(t) {
     dataDir: path.join(root, "manager-data")
   };
 }
+
+test("new stores start without providers, cycle entries, or an active route", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+
+  assert.deepEqual(store.get().providers, []);
+  assert.deepEqual(store.get().cycle.modelRefs, []);
+  assert.deepEqual(store.get().active, { providerId: "", modelId: "", thinking: "off" });
+
+  const reloaded = createStore(fixture);
+  assert.deepEqual(reloaded.get().providers, []);
+  assert.deepEqual(reloaded.get().cycle.modelRefs, []);
+  assert.deepEqual(reloaded.get().active, { providerId: "", modelId: "", thinking: "off" });
+});
 
 test("custom provider metadata and credential survive reload without leaking into state.json", (t) => {
   const fixture = makeFixture(t);
@@ -75,6 +90,7 @@ test("stores repair a legacy empty gateway client key without changing other con
 test("API and bridge credentials can be saved and cleared without leaking into state.json", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
 
   store.setCredential("qiniu", "qiniu-ui-secret");
   store.setCredential("antigravity", "bridge-ui-secret");
@@ -96,6 +112,7 @@ test("API and bridge credentials can be saved and cleared without leaking into s
 test("manager-stored antigravity credentials take precedence over bridge env files", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
   const bridgePath = path.join(fixture.projectRoot, "antigravity-bridge");
   fs.mkdirSync(bridgePath, { recursive: true });
   fs.writeFileSync(path.join(bridgePath, ".env"), "API_KEY=from-bridge\n");
@@ -120,6 +137,7 @@ test("manager-stored antigravity credentials take precedence over bridge env fil
 test("custom provider catalogs can add and remove models without dropping the default route", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
   store.addProvider({
     id: "demo-relay",
     name: "Demo Relay",
@@ -144,8 +162,8 @@ test("custom provider catalogs can add and remove models without dropping the de
     () => store.removeProviderModel({ providerId: "demo-relay", modelId: "keep-model" }),
     /不能删除当前默认模型/
   );
-  assert.throws(() => store.addProviderModel({ providerId: "qiniu", model: { id: "nope" } }), /内置渠道不能增删模型/);
-  assert.throws(() => store.removeProviderModel({ providerId: "qiniu", modelId: "grok-4.6" }), /内置渠道不能增删模型/);
+  assert.throws(() => store.addProviderModel({ providerId: "openai-codex", model: { id: "nope" } }), /只有 OpenAI 兼容 API 渠道可以增删模型/);
+  assert.throws(() => store.removeProviderModel({ providerId: "openai-codex", modelId: "gpt-5.6-luna" }), /只有 OpenAI 兼容 API 渠道可以增删模型/);
 });
 
 test("custom provider validation rejects unsupported URLs and empty model lists", (t) => {
@@ -165,6 +183,7 @@ test("custom provider validation rejects unsupported URLs and empty model lists"
 test("custom providers can be edited without dropping model metadata or leaking secrets", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
   store.addProvider({
     id: "demo-relay",
     name: "Demo Relay",
@@ -206,6 +225,7 @@ test("custom providers can be edited without dropping model metadata or leaking 
 test("editing a custom provider can rename its id and rewrite cycle refs", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
   store.addProvider({
     id: "demo-relay",
     name: "Demo Relay",
@@ -229,9 +249,10 @@ test("editing a custom provider can rename its id and rewrite cycle refs", (t) =
   assert.equal(store.credential({ id: "demo-relay" }), "");
 });
 
-test("custom provider edits reject builtins, duplicate ids and emptying the catalog", (t) => {
+test("custom provider edits reject native channels, duplicate ids and emptying the catalog", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
   store.addProvider({
     id: "demo-relay",
     name: "Demo Relay",
@@ -245,9 +266,9 @@ test("custom provider edits reject builtins, duplicate ids and emptying the cata
     models: ["other-model"]
   });
 
-  assert.throws(() => store.updateProvider("qiniu", { name: "Nope" }), /内置渠道不能编辑/);
-  assert.throws(() => store.updateProvider("antigravity", { name: "Nope" }), /内置渠道不能编辑/);
-  assert.throws(() => store.updateProvider("openai-codex", { name: "Nope" }), /内置渠道不能编辑/);
+  assert.throws(() => store.updateProvider("openai-codex", { name: "Nope" }), /只有 OpenAI 兼容 API 渠道可以编辑/);
+  store.updateProvider("qiniu", { name: "七牛云改名" });
+  assert.equal(store.provider("qiniu").name, "七牛云改名");
   assert.throws(
     () => store.updateProvider("demo-relay", { id: "other-relay" }),
     /Provider ID 已存在/
@@ -269,6 +290,7 @@ test("custom provider edits reject builtins, duplicate ids and emptying the cata
 test("profile generation writes ready providers into models.json and keeps the launcher isolated", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
   store.setCredential("qiniu", "qiniu-secret-value");
   store.addProvider({
     id: "demo-relay",
@@ -286,6 +308,7 @@ test("profile generation writes ready providers into models.json and keeps the l
     apiKey: "test-secret-value"
   });
   store.setActive({ providerId: "demo-relay", modelId: "demo-model", thinking: "high" });
+  store.updateCycleList(["demo-relay/demo-model", "qiniu/gpt-5.6-luna"]);
 
   const profile = writePiProfile({
     dataDir: fixture.dataDir,
@@ -307,9 +330,8 @@ test("profile generation writes ready providers into models.json and keeps the l
   assert.equal(settings.defaultProvider, "demo-relay");
   assert.equal(settings.defaultModel, "demo-model");
   assert.deepEqual(settings.enabledModels, [
-    "qiniu/gpt-5.6-luna",
-    "openai-codex/gpt-5.6-luna",
-    "qiniu/gpt-5.6-sol"
+    "demo-relay/demo-model",
+    "qiniu/gpt-5.6-luna"
   ]);
   assert.equal(models.providers["demo-relay"].baseUrl, "https://relay.example.test/v1");
   assert.equal(models.providers["demo-relay"].apiKey, "$PI_MANAGER_DEMO_RELAY_API_KEY");
@@ -338,6 +360,7 @@ test("profile migration removes only known legacy Manager files", (t) => {
   fs.writeFileSync(path.join(sessionsDir, "keep.jsonl"), "session\n");
 
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
   const profile = writePiProfile({ dataDir: fixture.dataDir, state: store.get(), piExecutable: "/usr/bin/pi" });
 
   assert.equal(fs.existsSync(path.join(profile.runtimeDir, "settings.json")), true);
@@ -348,6 +371,7 @@ test("profile migration removes only known legacy Manager files", (t) => {
 test("candidate route rejects unsupported thinking levels", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
   const before = store.snapshot().active;
 
   assert.throws(
@@ -360,6 +384,7 @@ test("candidate route rejects unsupported thinking levels", (t) => {
 test("thinking maps preserve explicit upstream values and null extended levels", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
   const before = store.provider("qiniu").models.find((model) => model.id === "gpt-5.6-luna");
 
   assert.deepEqual(getSupportedThinkingLevels(before), ["off", "low", "medium", "high", "xhigh"]);
@@ -391,6 +416,7 @@ test("thinking maps preserve explicit upstream values and null extended levels",
 test("thinking map cannot invalidate the active default route", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
 
   assert.throws(
     () => store.updateThinkingMap({
@@ -405,6 +431,7 @@ test("thinking map cannot invalidate the active default route", (t) => {
 test("context window updates persist and reject invalid values", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
 
   store.updateModelContextWindow({
     providerId: "qiniu",
@@ -427,6 +454,7 @@ test("context window updates persist and reject invalid values", (t) => {
 test("candidate route changes remain unapplied until profile application", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
   const before = store.snapshot();
 
   store.setActive({ providerId: "qiniu", modelId: "gpt-5.6-sol", thinking: "high" });
@@ -439,6 +467,7 @@ test("candidate route changes remain unapplied until profile application", (t) =
 test("rollback restores the last applied configuration snapshot", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
   const appliedSnapshot = store.snapshotConfiguration();
 
   store.update((state) => {
@@ -459,6 +488,8 @@ test("rollback restores the last applied configuration snapshot", (t) => {
 test("cycle list updates persist and write enabledModels in order", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
+  store.setActive({ providerId: "qiniu", modelId: "gpt-5.6-luna", thinking: "medium" });
 
   store.updateCycleList([
     "qiniu/grok-4.6",
@@ -485,6 +516,8 @@ test("cycle list updates persist and write enabledModels in order", (t) => {
 test("profile generation rejects missing cycle references", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
+  store.setActive({ providerId: "qiniu", modelId: "gpt-5.6-luna", thinking: "medium" });
   store.updateCycleList(["missing-provider/missing-model"]);
 
   assert.throws(
@@ -528,6 +561,8 @@ test("profile writes the saved thinking map without silently downgrading levels"
 test("native profiles write model thinking overrides to models.json", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
+  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
+  store.setActive({ providerId: "qiniu", modelId: "gpt-5.6-luna", thinking: "medium" });
   const profile = writePiProfile({
     dataDir: fixture.dataDir,
     state: store.get(),

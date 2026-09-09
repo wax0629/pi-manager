@@ -5,6 +5,7 @@ import type {
   PiImportPreview,
   PiImportResult,
   ProviderConnectionTestResult,
+  ProviderState,
   StateResponse,
   UpdateProviderInput,
 } from './types';
@@ -54,11 +55,15 @@ export async function previewPiImport(): Promise<{ ok: true; preview: PiImportPr
   return request<{ ok: true; preview: PiImportPreview }>('/api/pi/import');
 }
 
-export async function importPiProviders(overwrite = false): Promise<{ ok: true; result: PiImportResult; state: ManagerState }> {
+export async function importPiProviders(overwrite = false, providerIds: string[] = []): Promise<{ ok: true; result: PiImportResult; state: ManagerState }> {
   return request<{ ok: true; result: PiImportResult; state: ManagerState }>('/api/pi/import', {
     method: 'POST',
-    body: JSON.stringify({ overwrite }),
+    body: JSON.stringify({ overwrite, providerIds }),
   });
+}
+
+export async function listFeaturedNativeProviders(): Promise<{ ok: true; providers: ProviderState[] }> {
+  return request<{ ok: true; providers: ProviderState[] }>('/api/pi/native-providers');
 }
 
 export async function createProvider(input: CreateProviderInput): Promise<CreateProviderResponse> {
