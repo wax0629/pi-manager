@@ -651,8 +651,12 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
         ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
         ...(model.maxTokens ? { maxTokens: model.maxTokens } : {})
       }));
-    if (selectedModels.length === 0 && modelIds.length === 0) {
-      setError('至少勾选或填写一个模型 ID。');
+    if (discoveredModels.length > 0 && selectedModels.length === 0) {
+      setError('请至少勾选一个上游模型，或清除上游目录后手工填写。');
+      return;
+    }
+    if (discoveredModels.length === 0 && modelIds.length === 0) {
+      setError('至少填写一个模型 ID。');
       return;
     }
     setSubmitting(true);
@@ -663,7 +667,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
           id: id.trim() || undefined,
           name: name.trim(),
           baseUrl: baseUrl.trim(),
-          models: selectedModels.length > 0 ? selectedModels : modelIds,
+          models: discoveredModels.length > 0 ? selectedModels : modelIds,
           apiKey: apiKey.trim() || undefined,
         });
         onSaved(response.state, '供应商已更新为候选配置');
@@ -673,7 +677,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
           name: name.trim(),
           baseUrl: baseUrl.trim(),
           kind: 'openai-api',
-          models: selectedModels.length > 0 ? selectedModels : modelIds,
+          models: discoveredModels.length > 0 ? selectedModels : modelIds,
           apiKey: apiKey.trim() || undefined,
         };
         const response = await createProvider(input);
