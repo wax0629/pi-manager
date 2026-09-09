@@ -71,6 +71,8 @@ new decision if the information is intentionally folded into the provider page.
 - Show loading and recoverable error states in the web UI.
 - Search provider cards and refresh the state from the backend.
 - Add a custom OpenAI-compatible provider with one or more model IDs.
+- Fetch an OpenAI-compatible provider's upstream `/models` catalog during
+  provider setup, then let the user search, edit, select and save models.
 - Import existing OpenAI-compatible providers from the local Pi `models.json`
   without modifying the source file or writing plaintext keys into state.json.
 - Edit an existing custom provider's name, provider ID, base URL, model list
@@ -112,7 +114,7 @@ new decision if the information is intentionally folded into the provider page.
 ## Deferred
 
 - profile diff preview and process ownership;
-- real provider model discovery;
+- automatic background catalog refresh;
 - Antigravity adapter.
 
 ## Verification
