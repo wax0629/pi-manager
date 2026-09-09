@@ -23,8 +23,51 @@ function safeId(value) {
 }
 
 const customProviderKinds = new Set(["openai-api"]);
+const BUILTIN_PROVIDER_IDS = new Set(["qiniu", "antigravity", "openai-codex"]);
 const DEFAULT_CONTEXT_WINDOW = 128000;
 const MAX_CONTEXT_WINDOW = 100000000;
+
+function isBuiltinProviderId(providerId) {
+  return BUILTIN_PROVIDER_IDS.has(String(providerId || "").trim());
+}
+
+function isEditableCustomProvider(provider) {
+  return Boolean(provider)
+    && provider.kind === "openai-api"
+    && !isBuiltinProviderId(provider.id);
+}
+
+function assertHttpUrl(value) {
+  let normalizedUrl;
+  try {
+    normalizedUrl = new URL(String(value || "").trim());
+  } catch {
+    throw new Error("Base URL 必须是有效的 http(s) 地址");
+  }
+  if (!/^https?:$/i.test(normalizedUrl.protocol)) throw new Error("Base URL 必须是有效的 http(s) 地址");
+  return normalizedUrl.toString().replace(/\/$/, "");
+}
+
+function parseModelInputs(models) {
+  if (Array.isArray(models)) return models;
+  return String(models || "").split(",");
+}
+
+function mergeProviderModels(models, existingModels = []) {
+  const existingById = new Map((existingModels || []).map((model) => [model.id, model]));
+  const nextModels = [];
+  const seen = new Set();
+  for (const item of parseModelInputs(models)) {
+    const incoming = typeof item === "string" ? { id: item.trim() } : item;
+    const id = String(incoming?.id || "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const previous = existingById.get(id);
+    const merged = normalizeModel(previous ? { ...previous, ...incoming, id } : incoming);
+    if (merged) nextModels.push(merged);
+  }
+  return nextModels;
+}
 
 function normalizeContextWindow(value, fallback = DEFAULT_CONTEXT_WINDOW) {
   const candidate = Number(value);
@@ -308,22 +351,23 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
       const normalizedName = String(name || "").trim();
       if (!normalizedName) throw new Error("渠道名称不能为空");
       if (!customProviderKinds.has(kind)) throw new Error("当前仅支持 OpenAI 兼容 API");
-      let normalizedUrl;
-      try {
-        normalizedUrl = new URL(String(baseUrl || "").trim());
-      } catch {
-        throw new Error("Base URL 必须是有效的 http(s) 地址");
-      }
-      if (!/^https?:$/i.test(normalizedUrl.protocol)) throw new Error("Base URL 必须是有效的 http(s) 地址");
+      const normalizedUrl = assertHttpUrl(baseUrl);
       const baseId = safeId(requestedId || normalizedName) || "provider";
+      if (isBuiltinProviderId(baseId) && requestedId) throw new Error("不能占用内置渠道 ID");
       let id = baseId;
       let counter = 2;
       while (store.provider(id)) id = `${baseId}-${counter++}`;
-      const normalizedModels = (Array.isArray(models) ? models : String(models).split(","))
-        .map(normalizeModel)
-        .filter(Boolean);
+      const normalizedModels = mergeProviderModels(models);
       if (!normalizedModels.length) throw new Error("至少填写一个模型 ID");
-      const provider = { id, name: normalizedName, kind, baseUrl: normalizedUrl.toString().replace(/\/$/, ""), credentialEnv: String(credentialEnv || "").trim(), description: "自定义 OpenAI 兼容 API", models: normalizedModels };
+      const provider = {
+        id,
+        name: normalizedName,
+        kind,
+        baseUrl: normalizedUrl,
+        credentialEnv: String(credentialEnv || "").trim(),
+        description: "自定义 OpenAI 兼容 API",
+        models: normalizedModels
+      };
       state.providers.push(provider);
       try {
         if (String(apiKey || "").trim()) setSecret({ dataDir, providerId: id, value: apiKey });
@@ -335,13 +379,85 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
       store.recordEvent("provider", `已添加渠道 ${normalizedName}`, id);
       return provider;
     },
+    updateProvider(providerId, {
+      id: requestedId,
+      name,
+      baseUrl,
+      models,
+      apiKey
+    } = {}) {
+      const provider = store.provider(providerId);
+      if (!provider) throw new Error("渠道不存在");
+      if (!isEditableCustomProvider(provider)) throw new Error("内置渠道不能编辑");
+
+      const nextName = name === undefined ? provider.name : String(name || "").trim();
+      if (!nextName) throw new Error("渠道名称不能为空");
+      const nextBaseUrl = baseUrl === undefined ? provider.baseUrl : assertHttpUrl(baseUrl);
+      const nextModels = models === undefined
+        ? provider.models
+        : mergeProviderModels(models, provider.models);
+      if (!nextModels.length) throw new Error("至少填写一个模型 ID");
+
+      const nextId = requestedId === undefined || requestedId === null || String(requestedId).trim() === ""
+        ? provider.id
+        : (safeId(requestedId) || provider.id);
+      if (nextId !== provider.id) {
+        if (isBuiltinProviderId(nextId)) throw new Error("不能占用内置渠道 ID");
+        if (store.provider(nextId)) throw new Error("Provider ID 已存在");
+      }
+
+      const nextModelIds = new Set(nextModels.map((model) => model.id));
+      if (state.active.providerId === provider.id && !nextModelIds.has(state.active.modelId)) {
+        throw new Error("不能删除当前正在使用的模型，请先切换默认模型");
+      }
+
+      const previousId = provider.id;
+      const previousSecret = store.credential(provider);
+      provider.name = nextName;
+      provider.baseUrl = nextBaseUrl;
+      provider.models = nextModels;
+      if (nextId !== previousId) {
+        provider.id = nextId;
+        if (state.active.providerId === previousId) state.active.providerId = nextId;
+        state.cycle.modelRefs = state.cycle.modelRefs.map((ref) => {
+          const slash = String(ref).indexOf("/");
+          if (slash <= 0) return ref;
+          const refProviderId = ref.slice(0, slash);
+          return refProviderId === previousId ? `${nextId}${ref.slice(slash)}` : ref;
+        });
+        if (previousSecret) {
+          setSecret({ dataDir, providerId: nextId, value: previousSecret });
+          deleteSecret({ dataDir, providerId: previousId });
+        }
+      }
+      state.cycle.modelRefs = normalizeCycleModelRefs(state.cycle.modelRefs.filter((ref) => {
+        const slash = String(ref).indexOf("/");
+        if (slash <= 0) return true;
+        const refProviderId = ref.slice(0, slash);
+        const refModelId = ref.slice(slash + 1);
+        if (refProviderId !== provider.id) return true;
+        return nextModelIds.has(refModelId);
+      }));
+
+      if (apiKey !== undefined) {
+        const normalizedKey = String(apiKey || "").trim();
+        if (normalizedKey) setSecret({ dataDir, providerId: provider.id, value: normalizedKey });
+      }
+
+      store.touchConfiguration();
+      store.recordEvent("provider", `已更新渠道 ${nextName}`, provider.id);
+      return provider;
+    },
     removeProvider(providerId) {
-      if (["qiniu", "antigravity", "openai-codex"].includes(providerId)) throw new Error("内置渠道不能删除");
+      if (isBuiltinProviderId(providerId)) throw new Error("内置渠道不能删除");
       if (state.active.providerId === providerId) throw new Error("当前渠道正在使用，请先切换");
       const index = state.providers.findIndex((provider) => provider.id === providerId);
       if (index === -1) throw new Error("渠道不存在");
       const [removed] = state.providers.splice(index, 1);
       deleteSecret({ dataDir, providerId });
+      state.cycle.modelRefs = normalizeCycleModelRefs(
+        state.cycle.modelRefs.filter((ref) => !String(ref).startsWith(`${providerId}/`))
+      );
       store.touchConfiguration();
       store.recordEvent("provider", `已删除渠道 ${removed.name}`, providerId);
     }
@@ -350,4 +466,4 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
   return store;
 }
 
-export { safeId, writeJsonAtomic };
+export { safeId, writeJsonAtomic, isBuiltinProviderId, isEditableCustomProvider };

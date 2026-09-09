@@ -86,6 +86,110 @@ test("custom provider validation rejects unsupported URLs and empty model lists"
   );
 });
 
+test("custom providers can be edited without dropping model metadata or leaking secrets", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  store.addProvider({
+    id: "demo-relay",
+    name: "Demo Relay",
+    baseUrl: "https://relay.example.test/v1",
+    models: [{
+      id: "demo-model",
+      name: "Demo Model",
+      reasoning: true,
+      thinkingLevelMap: { off: "none", medium: "balanced", high: "deep" },
+      contextWindow: 256000
+    }],
+    apiKey: "old-secret"
+  });
+  store.updateCycleList(["demo-relay/demo-model", "qiniu/grok-4.6"]);
+
+  const updated = store.updateProvider("demo-relay", {
+    name: "Demo Relay West",
+    baseUrl: "https://relay-west.example.test/v1/",
+    models: ["demo-model", "demo-plus"],
+    apiKey: "new-secret"
+  });
+
+  assert.equal(updated.name, "Demo Relay West");
+  assert.equal(updated.baseUrl, "https://relay-west.example.test/v1");
+  assert.equal(updated.models.length, 2);
+  assert.equal(updated.models[0].thinkingLevelMap.medium, "balanced");
+  assert.equal(updated.models[0].contextWindow, 256000);
+  assert.equal(updated.models[1].id, "demo-plus");
+  assert.equal(store.credential(updated), "new-secret");
+  assert.equal(fs.readFileSync(store.statePath, "utf8").includes("new-secret"), false);
+
+  const reloaded = createStore(fixture);
+  const reloadedProvider = reloaded.provider("demo-relay");
+  assert.equal(reloadedProvider.name, "Demo Relay West");
+  assert.equal(reloadedProvider.models[0].thinkingLevelMap.high, "deep");
+  assert.equal(reloaded.credential(reloadedProvider), "new-secret");
+});
+
+test("editing a custom provider can rename its id and rewrite cycle refs", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  store.addProvider({
+    id: "demo-relay",
+    name: "Demo Relay",
+    baseUrl: "https://relay.example.test/v1",
+    models: ["demo-model", "stale-model"],
+    apiKey: "rename-secret"
+  });
+  store.setActive({ providerId: "demo-relay", modelId: "demo-model", thinking: "off" });
+  store.updateCycleList(["demo-relay/demo-model", "demo-relay/stale-model", "qiniu/grok-4.6"]);
+
+  const renamed = store.updateProvider("demo-relay", {
+    id: "west-relay",
+    models: ["demo-model"]
+  });
+
+  assert.equal(renamed.id, "west-relay");
+  assert.equal(store.provider("demo-relay"), undefined);
+  assert.equal(store.get().active.providerId, "west-relay");
+  assert.deepEqual(store.get().cycle.modelRefs, ["west-relay/demo-model", "qiniu/grok-4.6"]);
+  assert.equal(store.credential(renamed), "rename-secret");
+  assert.equal(store.credential({ id: "demo-relay" }), "");
+});
+
+test("custom provider edits reject builtins, duplicate ids and emptying the catalog", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  store.addProvider({
+    id: "demo-relay",
+    name: "Demo Relay",
+    baseUrl: "https://relay.example.test/v1",
+    models: ["demo-model"]
+  });
+  store.addProvider({
+    id: "other-relay",
+    name: "Other Relay",
+    baseUrl: "https://other.example.test/v1",
+    models: ["other-model"]
+  });
+
+  assert.throws(() => store.updateProvider("qiniu", { name: "Nope" }), /内置渠道不能编辑/);
+  assert.throws(() => store.updateProvider("antigravity", { name: "Nope" }), /内置渠道不能编辑/);
+  assert.throws(() => store.updateProvider("openai-codex", { name: "Nope" }), /内置渠道不能编辑/);
+  assert.throws(
+    () => store.updateProvider("demo-relay", { id: "other-relay" }),
+    /Provider ID 已存在/
+  );
+  assert.throws(
+    () => store.updateProvider("demo-relay", { id: "qiniu" }),
+    /不能占用内置渠道 ID/
+  );
+  assert.throws(
+    () => store.updateProvider("demo-relay", { baseUrl: "ftp://relay.example.test" }),
+    /http\(s\)/
+  );
+  assert.throws(
+    () => store.updateProvider("demo-relay", { models: [] }),
+    /至少填写一个模型 ID/
+  );
+});
+
 test("profile generation writes ready providers into models.json and keeps the launcher isolated", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);

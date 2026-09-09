@@ -37,6 +37,7 @@ import {
   updateModelContextWindow,
   routeProvider,
   updateModelThinking,
+  updateProvider,
 } from './api';
 import type {
   CreateProviderInput,
@@ -51,6 +52,12 @@ import type {
 } from './types';
 
 type NavId = 'providers' | 'models' | 'profiles' | 'diagnostics';
+
+const BUILTIN_PROVIDER_IDS = ['qiniu', 'antigravity', 'openai-codex'] as const;
+
+function isCustomApiProvider(provider: ProviderState) {
+  return provider.kind === 'openai-api' && !BUILTIN_PROVIDER_IDS.includes(provider.id as typeof BUILTIN_PROVIDER_IDS[number]);
+}
 
 function projectName(projectPath: string) {
   return projectPath.split(/[\\/]/).filter(Boolean).at(-1) || projectPath;
@@ -251,16 +258,18 @@ function Topbar({ state, onDeploy, onRefresh, refreshing }: { state: ManagerStat
   );
 }
 
-function ProviderCard({ provider, testResult, onTest, onRefresh, onDelete }: {
+function ProviderCard({ provider, testResult, onTest, onRefresh, onEdit, onDelete }: {
   provider: ProviderState;
   testResult?: ProviderConnectionTestResult;
   onTest: () => void;
   onRefresh: () => void;
+  onEdit?: () => void;
   onDelete: () => void;
 }) {
   const meta = statusMeta(provider.status);
   const isNative = provider.kind === 'native-subscription';
-  const canDelete = !['qiniu', 'antigravity', 'openai-codex'].includes(provider.id) && !isNative;
+  const canEdit = isCustomApiProvider(provider);
+  const canDelete = canEdit;
 
   return (
     <article className="group flex min-h-[286px] flex-col overflow-hidden rounded-xl border border-surface-200 bg-white transition-all hover:border-surface-400 hover:shadow-vercel dark:border-surface-800 dark:bg-[#0a0a0a] dark:hover:border-surface-600 dark:hover:shadow-linear">
@@ -342,6 +351,17 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onDelete }: {
           >
             <RefreshCw size={14} />
           </button>
+          {canEdit && onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              title="编辑供应商"
+              aria-label={`编辑 ${provider.name}`}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-white"
+            >
+              <Pencil size={14} />
+            </button>
+          )}
           {canDelete && (
             <button
               type="button"
@@ -359,12 +379,13 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onDelete }: {
   );
 }
 
-function ProvidersPage({ state, testResults, onAdd, onRefresh, onTest, onDelete }: {
+function ProvidersPage({ state, testResults, onAdd, onRefresh, onTest, onEdit, onDelete }: {
   state: ManagerState;
   testResults: Record<string, ProviderConnectionTestResult>;
   onAdd: () => void;
   onRefresh: () => void;
   onTest: (provider: ProviderState) => void;
+  onEdit: (provider: ProviderState) => void;
   onDelete: (provider: ProviderState) => void;
 }) {
   const [filter, setFilter] = useState<'all' | 'ready' | 'native'>('all');
@@ -441,6 +462,7 @@ function ProvidersPage({ state, testResults, onAdd, onRefresh, onTest, onDelete 
               testResult={testResults[provider.id]}
               onTest={() => onTest(provider)}
               onRefresh={onRefresh}
+              onEdit={() => onEdit(provider)}
               onDelete={() => onDelete(provider)}
             />
           ))}
@@ -456,12 +478,18 @@ function ProvidersPage({ state, testResults, onAdd, onRefresh, onTest, onDelete 
   );
 }
 
-function AddProviderModal({ isOpen, onClose, onSaved }: { isOpen: boolean; onClose: () => void; onSaved: (state: ManagerState) => void }) {
-  const [name, setName] = useState('');
-  const [id, setId] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
+function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
+  provider?: ProviderState | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onSaved: (state: ManagerState, notice: string) => void;
+}) {
+  const editing = Boolean(provider);
+  const [name, setName] = useState(provider?.name || '');
+  const [id, setId] = useState(provider?.id || '');
+  const [baseUrl, setBaseUrl] = useState(provider?.baseUrl || '');
   const [apiKey, setApiKey] = useState('');
-  const [models, setModels] = useState('');
+  const [models, setModels] = useState(provider?.models.map((model) => model.id).join(', ') || '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -474,19 +502,30 @@ function AddProviderModal({ isOpen, onClose, onSaved }: { isOpen: boolean; onClo
       setError('至少填写一个模型 ID。');
       return;
     }
-    const input: CreateProviderInput = {
-      id: id.trim() || undefined,
-      name: name.trim(),
-      baseUrl: baseUrl.trim(),
-      kind: 'openai-api',
-      models: modelIds,
-      apiKey: apiKey.trim() || undefined,
-    };
     setSubmitting(true);
     setError('');
     try {
-      const response = await createProvider(input);
-      onSaved(response.state);
+      if (editing && provider) {
+        const response = await updateProvider(provider.id, {
+          id: id.trim() || undefined,
+          name: name.trim(),
+          baseUrl: baseUrl.trim(),
+          models: modelIds,
+          apiKey: apiKey.trim() || undefined,
+        });
+        onSaved(response.state, '供应商已更新为候选配置');
+      } else {
+        const input: CreateProviderInput = {
+          id: id.trim() || undefined,
+          name: name.trim(),
+          baseUrl: baseUrl.trim(),
+          kind: 'openai-api',
+          models: modelIds,
+          apiKey: apiKey.trim() || undefined,
+        };
+        const response = await createProvider(input);
+        onSaved(response.state, '供应商已保存为候选配置');
+      }
       onClose();
     } catch (caughtError) {
       setError(caughtError instanceof ApiError ? caughtError.message : '保存失败，请稍后重试。');
@@ -497,10 +536,10 @@ function AddProviderModal({ isOpen, onClose, onSaved }: { isOpen: boolean; onClo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm dark:bg-black/60" role="presentation">
-      <div className="w-full max-w-lg overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="add-provider-title">
+      <div className="w-full max-w-lg overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="provider-editor-title">
         <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
           <div>
-            <h2 id="add-provider-title" className="text-[16px] font-bold text-surface-900 dark:text-white">新增 API 中转</h2>
+            <h2 id="provider-editor-title" className="text-[16px] font-bold text-surface-900 dark:text-white">{editing ? '编辑 API 中转' : '新增 API 中转'}</h2>
             <p className="mt-1 text-[12px] text-surface-500">OpenAI 兼容接口</p>
           </div>
           <button type="button" onClick={onClose} disabled={submitting} title="关闭" aria-label="关闭" className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
@@ -529,7 +568,7 @@ function AddProviderModal({ isOpen, onClose, onSaved }: { isOpen: boolean; onClo
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">API Key <span className="font-normal text-surface-400">可选</span></span>
               <div className="relative">
                 <KeyRound size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
-                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" autoComplete="new-password" placeholder="留空则稍后配置" className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" autoComplete="new-password" placeholder={editing ? (provider?.credentialConfigured ? '留空则保留已有密钥' : '留空则稍后配置') : '留空则稍后配置'} className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
               </div>
               <p className="text-[11px] text-surface-500">只显示配置状态，不在界面回显密钥。</p>
             </label>
@@ -1418,7 +1457,7 @@ function App() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [connectionTests, setConnectionTests] = useState<Record<string, ProviderConnectionTestResult>>({});
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<ProviderState | null | undefined>(undefined);
   const [showDeployModal, setShowDeployModal] = useState(false);
 
   useEffect(() => {
@@ -1499,14 +1538,14 @@ function App() {
           <div className="mx-auto max-w-[1200px] pb-20">
             {error && <div className="mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
             {notice && <div className="mb-5 flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={14} className="mr-2" />{notice}</div>}
-            {activeNav === 'providers' && <ProvidersPage state={state} testResults={connectionTests} onAdd={() => setShowAddModal(true)} onRefresh={() => void refreshState()} onTest={(provider) => void handleTestProvider(provider)} onDelete={(provider) => void handleDeleteProvider(provider)} />}
+            {activeNav === 'providers' && <ProvidersPage state={state} testResults={connectionTests} onAdd={() => setEditingProvider(null)} onRefresh={() => void refreshState()} onTest={(provider) => void handleTestProvider(provider)} onEdit={(provider) => setEditingProvider(provider)} onDelete={(provider) => void handleDeleteProvider(provider)} />}
             {activeNav === 'models' && <ModelsPage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
             {activeNav === 'profiles' && <ProfilePage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
             {activeNav === 'diagnostics' && <DiagnosticsPage state={state} />}
           </div>
         </div>
       </main>
-      <AddProviderModal key={showAddModal ? 'open' : 'closed'} isOpen={showAddModal} onClose={() => setShowAddModal(false)} onSaved={(nextState) => { setState(nextState); setNotice('供应商已保存为候选配置'); setError(''); }} />
+      <ProviderEditorModal key={editingProvider === undefined ? 'closed' : editingProvider?.id || 'create'} provider={editingProvider} isOpen={editingProvider !== undefined} onClose={() => setEditingProvider(undefined)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
       <DeployModal key={showDeployModal ? 'open' : 'closed'} state={state} isOpen={showDeployModal} onClose={() => setShowDeployModal(false)} onApplied={(nextState) => { setState(nextState); setNotice('配置已应用'); setError(''); }} />
     </div>
   );

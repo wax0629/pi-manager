@@ -14,6 +14,10 @@ Add provider form
   -> /api/providers
   -> provider metadata + local credential storage
 
+Edit custom provider form
+  -> PATCH /api/providers/:id
+  -> name / providerId / baseUrl / model list / optional API key
+
 Model default controls and Thinking mapping
   -> /api/route + /api/models/thinking
   -> validated candidate route + capability-checked Thinking mapping
@@ -63,6 +67,8 @@ new decision if the information is intentionally folded into the provider page.
 - Show loading and recoverable error states in the web UI.
 - Search provider cards and refresh the state from the backend.
 - Add a custom OpenAI-compatible provider with one or more model IDs.
+- Edit an existing custom provider's name, provider ID, base URL, model list
+  and optional API key, while preserving remaining model metadata.
 - Save an optional API key through the existing credential abstraction without
   returning the key in API state.
 - Test provider connectivity from the provider cards with categorized failure
