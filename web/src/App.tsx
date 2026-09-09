@@ -29,6 +29,7 @@ import {
   applyProfile,
   addProviderModel,
   createProvider,
+  discoverProviderModels,
   importPiProviders,
   listFeaturedNativeProviders,
   previewPiImport,
@@ -57,6 +58,7 @@ import {
 import type {
   CreateProviderInput,
   CycleListEntry,
+  DiscoveredModel,
   PiImportPreview,
   ManagerState,
   ModelDefinition,
@@ -591,16 +593,66 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
   const [baseUrl, setBaseUrl] = useState(provider?.baseUrl || '');
   const [apiKey, setApiKey] = useState('');
   const [models, setModels] = useState(provider?.models.map((model) => model.id).join(', ') || '');
+  const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>([]);
+  const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
+  const [discoveryQuery, setDiscoveryQuery] = useState('');
+  const [discovering, setDiscovering] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
+  const discover = async () => {
+    if (!baseUrl.trim()) {
+      setDiscoveryError('请先填写 Base URL。');
+      return;
+    }
+    setDiscovering(true);
+    setDiscoveryError('');
+    try {
+      const response = await discoverProviderModels({ baseUrl: baseUrl.trim(), apiKey: apiKey.trim() || undefined });
+      if (!response.result.ok) {
+        setDiscoveryError(`${response.result.message}。仍可手工填写模型。`);
+        return;
+      }
+      setDiscoveredModels(response.result.models);
+      setSelectedModelIds(response.result.models.map((model) => model.id));
+      setModels(response.result.models.map((model) => model.id).join(', '));
+    } catch (caughtError) {
+      setDiscoveryError(caughtError instanceof ApiError ? caughtError.message : '获取上游模型失败。仍可手工填写模型。');
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
+  const visibleDiscoveredModels = discoveredModels.filter((model) => {
+    const query = discoveryQuery.trim().toLowerCase();
+    return !query || `${model.id} ${model.name} ${model.ownedBy || ''}`.toLowerCase().includes(query);
+  });
+
+  const updateDiscoveredModel = (modelId: string, patch: Partial<DiscoveredModel>) => {
+    setDiscoveredModels((current) => current.map((model) => model.id === modelId ? { ...model, ...patch } : model));
+    if (patch.id !== undefined && patch.id !== modelId) {
+      setSelectedModelIds((current) => current.map((id) => id === modelId ? patch.id! : id));
+    }
+  };
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const modelIds = models.split(',').map((model) => model.trim()).filter(Boolean);
-    if (modelIds.length === 0) {
-      setError('至少填写一个模型 ID。');
+    const selectedModels = discoveredModels
+      .filter((model) => selectedModelIds.includes(model.id) && model.id.trim())
+      .map((model) => ({
+        id: model.id.trim(),
+        name: model.name.trim() || model.id.trim(),
+        reasoning: model.reasoning,
+        input: model.input,
+        ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
+        ...(model.maxTokens ? { maxTokens: model.maxTokens } : {})
+      }));
+    if (selectedModels.length === 0 && modelIds.length === 0) {
+      setError('至少勾选或填写一个模型 ID。');
       return;
     }
     setSubmitting(true);
@@ -611,7 +663,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
           id: id.trim() || undefined,
           name: name.trim(),
           baseUrl: baseUrl.trim(),
-          models: modelIds,
+          models: selectedModels.length > 0 ? selectedModels : modelIds,
           apiKey: apiKey.trim() || undefined,
         });
         onSaved(response.state, '供应商已更新为候选配置');
@@ -621,7 +673,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
           name: name.trim(),
           baseUrl: baseUrl.trim(),
           kind: 'openai-api',
-          models: modelIds,
+          models: selectedModels.length > 0 ? selectedModels : modelIds,
           apiKey: apiKey.trim() || undefined,
         };
         const response = await createProvider(input);
@@ -660,11 +712,38 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Base URL</span>
               <input required type="url" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
             </label>
-            <label className="block space-y-1.5">
-              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">模型 ID</span>
-              <input required value={models} onChange={(event) => setModels(event.target.value)} placeholder="gpt-5.6-luna, grok-4.6" className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
-              <p className="text-[11px] text-surface-500">多个模型用逗号分隔。</p>
-            </label>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">上游模型目录</span>
+                  <p className="mt-0.5 text-[11px] text-surface-500">获取后勾选并编辑；也可以手工填写。</p>
+                </div>
+                <button type="button" onClick={() => void discover()} disabled={discovering} className="inline-flex h-8 shrink-0 items-center rounded-md border border-surface-200 px-3 text-[12px] font-medium text-surface-700 hover:bg-surface-50 disabled:cursor-wait disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800">
+                  {discovering && <Loader2 size={13} className="mr-1.5 animate-spin" />}
+                  获取模型
+                </button>
+              </div>
+              {discoveredModels.length > 0 && <div className="space-y-2 rounded-md border border-surface-200 p-2 dark:border-surface-700">
+                <div className="flex items-center gap-2">
+                  <input value={discoveryQuery} onChange={(event) => setDiscoveryQuery(event.target.value)} placeholder="搜索上游模型" className="min-w-0 flex-1 rounded border border-surface-200 bg-surface-50 px-2 py-1.5 text-[12px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+                  <button type="button" onClick={() => setSelectedModelIds(visibleDiscoveredModels.map((model) => model.id))} className="shrink-0 text-[11px] text-primary-600 hover:underline dark:text-primary-400">全选</button>
+                  <button type="button" onClick={() => setSelectedModelIds([])} className="shrink-0 text-[11px] text-surface-500 hover:underline">清空</button>
+                </div>
+                <div className="max-h-48 space-y-1 overflow-y-auto">
+                {visibleDiscoveredModels.map((model) => (
+                  <div key={model.id} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-surface-50 dark:hover:bg-surface-800/60">
+                    <input type="checkbox" checked={selectedModelIds.includes(model.id)} onChange={(event) => setSelectedModelIds((current) => event.target.checked ? [...current, model.id] : current.filter((id) => id !== model.id))} aria-label={`选择 ${model.id}`} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
+                    <input value={model.id} onChange={(event) => updateDiscoveredModel(model.id, { id: event.target.value })} aria-label={`${model.id} 模型 ID`} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 font-mono text-[12px] text-surface-900 outline-none focus:border-surface-300 focus:bg-white dark:text-white dark:focus:border-surface-600 dark:focus:bg-surface-900" />
+                    <input value={model.name} onChange={(event) => updateDiscoveredModel(model.id, { name: event.target.value })} aria-label={`${model.id} 显示名称`} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 text-[12px] text-surface-700 outline-none focus:border-surface-300 focus:bg-white dark:text-surface-200 dark:focus:border-surface-600 dark:focus:bg-surface-900" />
+                    <label className="flex shrink-0 items-center gap-1 text-[10px] text-surface-400"><input type="checkbox" checked={model.reasoning} onChange={(event) => updateDiscoveredModel(model.id, { reasoning: event.target.checked })} />思考</label>
+                  </div>
+                ))}
+                {visibleDiscoveredModels.length === 0 && <p className="px-2 py-3 text-[11px] text-surface-500">没有匹配的上游模型。</p>}
+                </div>
+              </div>}
+              <input value={models} onChange={(event) => { setModels(event.target.value); setSelectedModelIds([]); }} placeholder="手工填写：gpt-5.6-luna, grok-4.6" className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+              {discoveryError && <p className="text-[11px] leading-4 text-amber-600 dark:text-amber-400">{discoveryError}</p>}
+            </div>
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">API Key <span className="font-normal text-surface-400">可选</span></span>
               <div className="relative">
