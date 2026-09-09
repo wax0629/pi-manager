@@ -508,6 +508,30 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
         existingProviders: state.providers
       });
     },
+    upsertNativeProvider(summary) {
+      const existing = store.provider(summary.id);
+      const models = mergeProviderModels(summary.models || [], existing?.models || []);
+      if (existing) {
+        if (existing.kind === "native-subscription") {
+          existing.name = summary.name || existing.name;
+          existing.piProvider = summary.piProvider || existing.piProvider || existing.id;
+          if (models.length) existing.models = models;
+        }
+        return existing;
+      }
+      const provider = {
+        id: summary.id,
+        name: summary.name || summary.id,
+        kind: "native-subscription",
+        piProvider: summary.piProvider || summary.id,
+        description: "Pi 原生渠道",
+        models
+      };
+      state.providers.push(provider);
+      store.touchConfiguration();
+      store.recordEvent("provider", `已接入 Pi 原生渠道 ${provider.name}`, provider.id);
+      return provider;
+    },
     importPiProviders({ modelsConfig, overwrite = false } = {}) {
       const preview = store.previewPiImport(modelsConfig);
       if (!overwrite && preview.conflicts.length > 0) {
