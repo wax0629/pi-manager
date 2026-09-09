@@ -6,6 +6,7 @@ import {
   Boxes,
   CheckCircle2,
   CircleAlert,
+  Download,
   ExternalLink,
   KeyRound,
   LayoutDashboard,
@@ -27,6 +28,8 @@ import {
   ApiError,
   applyProfile,
   createProvider,
+  importPiProviders,
+  previewPiImport,
   deleteProvider,
   deleteProviderCredential,
   getState,
@@ -44,6 +47,7 @@ import {
 import type {
   CreateProviderInput,
   CycleListEntry,
+  PiImportPreview,
   ManagerState,
   ModelDefinition,
   ProviderConnectionTestResult,
@@ -398,10 +402,11 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
   );
 }
 
-function ProvidersPage({ state, testResults, onAdd, onRefresh, onTest, onCredential, onEdit, onDelete }: {
+function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest, onCredential, onEdit, onDelete }: {
   state: ManagerState;
   testResults: Record<string, ProviderConnectionTestResult>;
   onAdd: () => void;
+  onImport: () => void;
   onRefresh: () => void;
   onTest: (provider: ProviderState) => void;
   onCredential: (provider: ProviderState) => void;
@@ -431,14 +436,24 @@ function ProvidersPage({ state, testResults, onAdd, onRefresh, onTest, onCredent
           <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">供应商与账号</h1>
           <p className="mt-1 text-[14px] text-surface-500">管理 Pi 原生账号、API 凭据和第三方中转；实际使用模型在模型资源库配置。</p>
         </div>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="flex h-9 shrink-0 items-center rounded-md bg-surface-950 px-4 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-surface-800 dark:bg-white dark:text-surface-950 dark:hover:bg-surface-200"
-        >
-          <Plus size={16} className="mr-2 opacity-70" />
-          新增供应商
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onImport}
+            className="flex h-9 items-center rounded-md border border-surface-200 bg-white px-4 text-[13px] font-medium text-surface-700 shadow-sm transition-colors hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200 dark:hover:bg-surface-800"
+          >
+            <Download size={16} className="mr-2 opacity-70" />
+            从本机 Pi 导入
+          </button>
+          <button
+            type="button"
+            onClick={onAdd}
+            className="flex h-9 items-center rounded-md bg-surface-950 px-4 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-surface-800 dark:bg-white dark:text-surface-950 dark:hover:bg-surface-200"
+          >
+            <Plus size={16} className="mr-2 opacity-70" />
+            新增供应商
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col items-start justify-between gap-4 border-b border-surface-200 pb-2 md:flex-row md:items-center dark:border-surface-800">
@@ -603,6 +618,104 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function ImportPiModal({ isOpen, onClose, onSaved }: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSaved: (state: ManagerState, notice: string) => void;
+}) {
+  const [preview, setPreview] = useState<PiImportPreview | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    void previewPiImport()
+      .then((response) => {
+        if (!cancelled) setPreview(response.preview);
+      })
+      .catch((caughtError) => {
+        if (!cancelled) setError(caughtError instanceof ApiError ? caughtError.message : '无法读取本机 Pi 配置。');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const importNow = async (overwrite: boolean) => {
+    setSubmitting(true);
+    setError('');
+    try {
+      const response = await importPiProviders(overwrite);
+      onSaved(response.state, `已导入 ${response.result.imported.length} 个本机 Pi 渠道`);
+      onClose();
+    } catch (caughtError) {
+      setError(caughtError instanceof ApiError ? caughtError.message : '导入失败。');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm dark:bg-black/60" role="presentation">
+      <div className="w-full max-w-xl overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="import-pi-title">
+        <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
+          <div>
+            <h2 id="import-pi-title" className="text-[16px] font-bold text-surface-900 dark:text-white">从本机 Pi 导入</h2>
+            <p className="mt-1 text-[12px] text-surface-500">只读读取 models.json 中的 OpenAI 兼容渠道，不修改源文件。</p>
+          </div>
+          <button type="button" onClick={onClose} disabled={submitting} title="关闭" aria-label="关闭" className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
+        </div>
+        <div className="max-h-[420px] space-y-4 overflow-y-auto p-6">
+          {loading && <div className="flex items-center text-[13px] text-surface-500"><Loader2 size={14} className="mr-2 animate-spin" />正在读取本机 Pi 配置</div>}
+          {preview && (
+            <>
+              <div className="truncate font-mono text-[11px] text-surface-400" title={preview.modelsPath}>{preview.modelsPath || '未找到 models.json'}</div>
+              {preview.candidates.length === 0 ? (
+                <p className="text-[13px] text-surface-500">没有可导入的 OpenAI 兼容渠道。</p>
+              ) : (
+                <ul className="space-y-2">
+                  {preview.candidates.map((candidate) => (
+                    <li key={candidate.id} className="rounded-md border border-surface-200 px-3 py-2 text-[12px] dark:border-surface-800">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-medium text-surface-900 dark:text-white">{candidate.name}</span>
+                        <span className="font-mono text-surface-400">{candidate.id}</span>
+                      </div>
+                      <div className="mt-1 truncate font-mono text-[11px] text-surface-500">{candidate.baseUrl}</div>
+                      <div className="mt-1 text-surface-500">{candidate.models.length} 个模型 · {candidate.credentialKind === 'literal' ? '将导入密钥到 Manager 凭据存储' : candidate.credentialKind === 'env' ? `引用 ${candidate.credentialEnv}` : '未配置密钥'}</div>
+                      {candidate.conflict && <div className="mt-1 text-amber-600 dark:text-amber-400">与现有渠道冲突：{candidate.existingName || candidate.id}</div>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {preview.skipped.length > 0 && <p className="text-[11px] text-surface-400">已跳过 {preview.skipped.map((item) => item.id).join(', ')}</p>}
+            </>
+          )}
+          {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
+        </div>
+        <div className="flex justify-end gap-3 border-t border-surface-100 bg-surface-50 p-5 dark:border-surface-800 dark:bg-surface-900/50">
+          <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 transition-colors hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">取消</button>
+          {preview && preview.conflicts.length > 0 && (
+            <button type="button" onClick={() => void importNow(true)} disabled={submitting || preview.candidates.length === 0} className="rounded-md border border-amber-200 px-4 py-2 text-[13px] font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-500/30 dark:text-amber-300 dark:hover:bg-amber-500/10">覆盖冲突并导入</button>
+          )}
+          <button type="button" onClick={() => void importNow(false)} disabled={submitting || !preview || preview.candidates.length === 0} className="flex items-center rounded-md bg-surface-950 px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-surface-800 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-surface-950 dark:hover:bg-surface-200">
+            {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
+            导入
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1566,6 +1679,7 @@ function App() {
   const [connectionTests, setConnectionTests] = useState<Record<string, ProviderConnectionTestResult>>({});
   const [editingProvider, setEditingProvider] = useState<ProviderState | null | undefined>(undefined);
   const [credentialProvider, setCredentialProvider] = useState<ProviderState | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [showDeployModal, setShowDeployModal] = useState(false);
 
   useEffect(() => {
@@ -1646,7 +1760,7 @@ function App() {
           <div className="mx-auto max-w-[1200px] pb-20">
             {error && <div className="mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
             {notice && <div className="mb-5 flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={14} className="mr-2" />{notice}</div>}
-            {activeNav === 'providers' && <ProvidersPage state={state} testResults={connectionTests} onAdd={() => setEditingProvider(null)} onRefresh={() => void refreshState()} onTest={(provider) => void handleTestProvider(provider)} onCredential={(provider) => setCredentialProvider(provider)} onEdit={(provider) => setEditingProvider(provider)} onDelete={(provider) => void handleDeleteProvider(provider)} />}
+            {activeNav === 'providers' && <ProvidersPage state={state} testResults={connectionTests} onAdd={() => setEditingProvider(null)} onImport={() => setShowImportModal(true)} onRefresh={() => void refreshState()} onTest={(provider) => void handleTestProvider(provider)} onCredential={(provider) => setCredentialProvider(provider)} onEdit={(provider) => setEditingProvider(provider)} onDelete={(provider) => void handleDeleteProvider(provider)} />}
             {activeNav === 'models' && <ModelsPage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
             {activeNav === 'profiles' && <ProfilePage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
             {activeNav === 'diagnostics' && <DiagnosticsPage state={state} />}
@@ -1654,6 +1768,7 @@ function App() {
         </div>
       </main>
       <ProviderEditorModal key={editingProvider === undefined ? 'closed' : editingProvider?.id || 'create'} provider={editingProvider} isOpen={editingProvider !== undefined} onClose={() => setEditingProvider(undefined)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
+      <ImportPiModal key={showImportModal ? 'import-open' : 'import-closed'} isOpen={showImportModal} onClose={() => setShowImportModal(false)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
       <CredentialModal key={credentialProvider?.id || 'credential-closed'} provider={credentialProvider} isOpen={Boolean(credentialProvider)} onClose={() => setCredentialProvider(null)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
       <DeployModal key={showDeployModal ? 'open' : 'closed'} state={state} isOpen={showDeployModal} onClose={() => setShowDeployModal(false)} onApplied={(nextState) => { setState(nextState); setNotice('配置已应用'); setError(''); }} />
     </div>
