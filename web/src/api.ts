@@ -163,6 +163,18 @@ export async function applyProfile(): Promise<{ ok: true; state: ManagerState }>
   });
 }
 
+export async function importLivePi(): Promise<{ ok: true; state: ManagerState }> {
+  return request<{ ok: true; state: ManagerState }>('/api/pi/live-import', {
+    method: 'POST',
+  });
+}
+
+export async function rollbackLivePi(): Promise<{ ok: true; state: ManagerState }> {
+  return request<{ ok: true; state: ManagerState }>('/api/pi/live-rollback', {
+    method: 'POST',
+  });
+}
+
 export async function rollbackProfile(): Promise<{ ok: true; state: ManagerState }> {
   return request<{ ok: true; state: ManagerState }>('/api/profile/rollback', {
     method: 'POST',

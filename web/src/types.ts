@@ -128,6 +128,9 @@ export interface ManagerState {
     lastLaunchPid: number | null;
     lastStopAt: string | null;
     lastError: string | null;
+    lastLiveImportAt: string | null;
+    lastLiveBackupDir: string;
+    lastLiveVerify: { ok: boolean; error: string; refs: string[] } | null;
     gatewayStats: GatewayStats;
     piExecutable: string;
   };

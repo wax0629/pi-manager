@@ -201,6 +201,9 @@ function normalizeState(defaultState, savedState) {
   if (merged.runtime.appliedSnapshot === undefined) merged.runtime.appliedSnapshot = null;
   if (!Number.isInteger(merged.runtime.configRevision) || merged.runtime.configRevision < 1) merged.runtime.configRevision = 1;
   if (!Number.isInteger(merged.runtime.appliedRevision) || merged.runtime.appliedRevision < 0) merged.runtime.appliedRevision = 0;
+  if (merged.runtime.lastLiveImportAt === undefined) merged.runtime.lastLiveImportAt = null;
+  if (!merged.runtime.lastLiveBackupDir) merged.runtime.lastLiveBackupDir = "";
+  if (merged.runtime.lastLiveVerify === undefined) merged.runtime.lastLiveVerify = null;
   return merged;
 }
 
