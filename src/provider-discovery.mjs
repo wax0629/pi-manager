@@ -35,15 +35,27 @@ function errorResult({ category, message, detail, status = 0, durationMs }) {
   return { ok: false, category, message, detail, status, durationMs, models: [] };
 }
 
+function modelsUrlCandidates(baseUrl) {
+  const normalized = String(baseUrl || "").trim();
+  const base = new URL(normalized);
+  base.username = "";
+  base.password = "";
+  base.search = "";
+  base.hash = "";
+  const candidates = [upstreamUrl(base.toString(), "models")];
+  if (!/\/v1\/?$/.test(base.pathname)) {
+    const withV1 = new URL(base.toString());
+    withV1.pathname = `${withV1.pathname.replace(/\/$/, "")}/v1`;
+    candidates.push(upstreamUrl(withV1.toString(), "models"));
+  }
+  return [...new Set(candidates)];
+}
+
 export async function discoverProviderModels({ baseUrl, apiKey = "", fetchImpl = fetch, timeoutMs = 5000 } = {}) {
   const startedAt = Date.now();
-  let modelsUrl;
+  let candidateUrls;
   try {
-    modelsUrl = upstreamUrl(String(baseUrl || "").trim(), "models");
-    const safeUrl = new URL(modelsUrl);
-    safeUrl.username = "";
-    safeUrl.password = "";
-    modelsUrl = safeUrl.toString();
+    candidateUrls = modelsUrlCandidates(baseUrl);
   } catch (error) {
     return errorResult({
       ...classifyConnectionError(error),
@@ -55,20 +67,28 @@ export async function discoverProviderModels({ baseUrl, apiKey = "", fetchImpl =
   const headers = { accept: "application/json" };
   if (String(apiKey || "").trim()) headers.authorization = `Bearer ${String(apiKey).trim()}`;
   let response;
-  try {
-    response = await fetchImpl(modelsUrl, {
-      method: "GET",
-      headers,
-      signal: AbortSignal.timeout(timeoutMs)
-    });
-  } catch (error) {
-    const failed = classifyConnectionError(error);
-    return errorResult({
-      category: failed.category,
-      message: failed.message,
-      detail: sanitizeConnectionTestUrl(modelsUrl),
-      durationMs: Date.now() - startedAt
-    });
+  let modelsUrl = candidateUrls[0];
+  for (const candidateUrl of candidateUrls) {
+    modelsUrl = candidateUrl;
+    try {
+      response = await fetchImpl(candidateUrl, {
+        method: "GET",
+        headers,
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+    } catch (error) {
+      const failed = classifyConnectionError(error);
+      return errorResult({
+        category: failed.category,
+        message: failed.message,
+        detail: sanitizeConnectionTestUrl(candidateUrl),
+        durationMs: Date.now() - startedAt
+      });
+    }
+    const contentType = response.headers.get("content-type") || "";
+    const canTryV1 = candidateUrl !== candidateUrls.at(-1)
+      && (response.status === 404 || (response.ok && !/application\/(?:[^;]+\+)?json/i.test(contentType)));
+    if (!canTryV1) break;
   }
 
   if (!response.ok) {
