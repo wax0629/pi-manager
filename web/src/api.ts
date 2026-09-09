@@ -163,6 +163,41 @@ export async function applyProfile(): Promise<{ ok: true; state: ManagerState }>
   });
 }
 
+export interface NativeLoginState {
+  loginId?: string;
+  providerId: string;
+  type: 'oauth' | 'api_key';
+  status: 'pending' | 'need_url' | 'need_prompt' | 'completed' | 'error';
+  authUrl?: string;
+  prompt?: { type: string; message: string; placeholder?: string; options?: Array<{ id: string; label: string }> } | null;
+  error?: string;
+}
+
+export async function startNativeLogin(input: { providerId: string; type?: 'oauth' | 'api_key'; apiKey?: string }): Promise<{ ok: true; login: NativeLoginState; state: ManagerState }> {
+  return request<{ ok: true; login: NativeLoginState; state: ManagerState }>('/api/pi/login', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getNativeLogin(loginId: string): Promise<{ ok: true; login: NativeLoginState; state: ManagerState }> {
+  return request<{ ok: true; login: NativeLoginState; state: ManagerState }>(`/api/pi/login/${encodeURIComponent(loginId)}`);
+}
+
+export async function answerNativeLogin(loginId: string, value: string): Promise<{ ok: true; login: NativeLoginState; state: ManagerState }> {
+  return request<{ ok: true; login: NativeLoginState; state: ManagerState }>(`/api/pi/login/${encodeURIComponent(loginId)}/prompt`, {
+    method: 'POST',
+    body: JSON.stringify({ value }),
+  });
+}
+
+export async function logoutNativeProvider(providerId: string): Promise<{ ok: true; state: ManagerState }> {
+  return request<{ ok: true; state: ManagerState }>('/api/pi/logout', {
+    method: 'POST',
+    body: JSON.stringify({ providerId }),
+  });
+}
+
 export async function importLivePi(): Promise<{ ok: true; state: ManagerState }> {
   return request<{ ok: true; state: ManagerState }>('/api/pi/live-import', {
     method: 'POST',

@@ -40,7 +40,12 @@ import {
   rollbackProfile,
   rollbackLivePi,
   importLivePi,
+  startNativeLogin,
+  getNativeLogin,
+  answerNativeLogin,
+  logoutNativeProvider,
   testProviderConnection,
+  type NativeLoginState,
   stopPi,
   updateCycleList,
   updateModelContextWindow,
@@ -272,12 +277,14 @@ function Topbar({ state, onDeploy, onRefresh, refreshing }: { state: ManagerStat
   );
 }
 
-function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, onEdit, onDelete }: {
+function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, onLogin, onLogout, onEdit, onDelete }: {
   provider: ProviderState;
   testResult?: ProviderConnectionTestResult;
   onTest: () => void;
   onRefresh: () => void;
   onCredential?: () => void;
+  onLogin?: () => void;
+  onLogout?: () => void;
   onEdit?: () => void;
   onDelete: () => void;
 }) {
@@ -367,6 +374,28 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
           >
             <RefreshCw size={14} />
           </button>
+          {isNative && onLogin && provider.status !== 'ready' && (
+            <button
+              type="button"
+              onClick={onLogin}
+              title="登录 Pi 原生渠道"
+              aria-label={`登录 ${provider.name}`}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-white"
+            >
+              <KeyRound size={14} />
+            </button>
+          )}
+          {isNative && onLogout && provider.status === 'ready' && (
+            <button
+              type="button"
+              onClick={onLogout}
+              title="退出 Pi 原生登录"
+              aria-label={`退出 ${provider.name}`}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-surface-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+            >
+              <X size={14} />
+            </button>
+          )}
           {canCredential && onCredential && (
             <button
               type="button"
@@ -406,7 +435,7 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
   );
 }
 
-function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest, onCredential, onEdit, onDelete }: {
+function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest, onCredential, onLogin, onLogout, onEdit, onDelete }: {
   state: ManagerState;
   testResults: Record<string, ProviderConnectionTestResult>;
   onAdd: () => void;
@@ -414,6 +443,8 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
   onRefresh: () => void;
   onTest: (provider: ProviderState) => void;
   onCredential: (provider: ProviderState) => void;
+  onLogin: (provider: ProviderState) => void;
+  onLogout: (provider: ProviderState) => void;
   onEdit: (provider: ProviderState) => void;
   onDelete: (provider: ProviderState) => void;
 }) {
@@ -502,6 +533,8 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
               onTest={() => onTest(provider)}
               onRefresh={onRefresh}
               onCredential={() => onCredential(provider)}
+              onLogin={() => onLogin(provider)}
+              onLogout={() => onLogout(provider)}
               onEdit={() => onEdit(provider)}
               onDelete={() => onDelete(provider)}
             />
@@ -719,6 +752,177 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
             {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
             导入
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
+  provider?: ProviderState | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onSaved: (state: ManagerState, notice: string) => void;
+}) {
+  const methods = provider?.authMethods?.length
+    ? provider.authMethods
+    : (['oauth', 'api_key'] as Array<'oauth' | 'api_key'>);
+  const [authType, setAuthType] = useState<'oauth' | 'api_key'>(methods.includes('oauth') ? 'oauth' : 'api_key');
+  const [apiKey, setApiKey] = useState('');
+  const [promptValue, setPromptValue] = useState('');
+  const [login, setLogin] = useState<NativeLoginState | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) {
+      setLogin(null);
+      setApiKey('');
+      setPromptValue('');
+      setError('');
+      setSubmitting(false);
+      setAuthType(methods.includes('oauth') ? 'oauth' : 'api_key');
+    }
+  }, [isOpen, provider?.id]);
+
+  useEffect(() => {
+    if (!isOpen || !login?.loginId || login.status === 'completed' || login.status === 'error') return undefined;
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      void getNativeLogin(login.loginId!)
+        .then((response) => {
+          if (cancelled) return;
+          setLogin(response.login);
+          if (response.login.status === 'completed') {
+            onSaved(response.state, `${provider?.name || 'Pi 原生渠道'} 已登录`);
+            onClose();
+          }
+          if (response.login.status === 'error') setError(response.login.error || '登录失败。');
+        })
+        .catch((caughtError) => {
+          if (!cancelled) setError(caughtError instanceof ApiError ? caughtError.message : '无法读取登录状态。');
+        });
+    }, 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isOpen, login?.loginId, login?.status, provider?.name]);
+
+  if (!isOpen || !provider) return null;
+
+  const startLogin = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    if (authType === 'api_key' && !apiKey.trim()) {
+      setError('API Key 不能为空。');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      const response = await startNativeLogin({
+        providerId: provider.id,
+        type: authType,
+        apiKey: authType === 'api_key' ? apiKey.trim() : undefined,
+      });
+      setLogin(response.login);
+      if (response.login.status === 'completed') {
+        onSaved(response.state, `${provider.name} 已登录`);
+        onClose();
+      }
+      if (response.login.status === 'error') setError(response.login.error || '登录失败。');
+    } catch (caughtError) {
+      setError(caughtError instanceof ApiError ? caughtError.message : '登录失败。');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const submitPrompt = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!login?.loginId || !promptValue.trim()) {
+      setError('请填写登录所需的验证码或选项。');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      const response = await answerNativeLogin(login.loginId, promptValue.trim());
+      setPromptValue('');
+      setLogin(response.login);
+    } catch (caughtError) {
+      setError(caughtError instanceof ApiError ? caughtError.message : '提交登录输入失败。');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm dark:bg-black/60" role="presentation">
+      <div className="w-full max-w-md overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="native-login-title">
+        <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
+          <div>
+            <h2 id="native-login-title" className="text-[16px] font-bold text-surface-900 dark:text-white">登录 Pi 原生渠道</h2>
+            <p className="mt-1 text-[12px] text-surface-500">{provider.name} · {provider.id}</p>
+          </div>
+          <button type="button" onClick={onClose} disabled={submitting} title="关闭" aria-label="关闭" className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
+        </div>
+        <div className="space-y-4 p-6">
+          <div className="rounded-md bg-surface-50 px-3 py-2 text-[12px] text-surface-500 dark:bg-surface-900/50">凭据写入本机 Pi 的 auth.json，不复制 refresh token，也不在 Manager 状态里保存明文。</div>
+          {!login && methods.length > 1 && (
+            <label className="block space-y-1.5">
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">登录方式</span>
+              <select value={authType} onChange={(event) => setAuthType(event.target.value as 'oauth' | 'api_key')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+                {methods.includes('oauth') && <option value="oauth">订阅 OAuth</option>}
+                {methods.includes('api_key') && <option value="api_key">API Key</option>}
+              </select>
+            </label>
+          )}
+          {!login && authType === 'api_key' && (
+            <form onSubmit={(event) => void startLogin(event)} className="space-y-4">
+              <label className="block space-y-1.5">
+                <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">API Key</span>
+                <input value={apiKey} onChange={(event) => { setApiKey(event.target.value); setError(''); }} type="password" autoComplete="new-password" autoFocus placeholder="不会回显已有密钥" className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+              </label>
+              <button type="submit" disabled={submitting} className="flex h-9 w-full items-center justify-center rounded-md bg-surface-950 text-[13px] font-medium text-white hover:bg-surface-800 disabled:opacity-60 dark:bg-white dark:text-surface-950">
+                {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
+                保存到 Pi auth.json
+              </button>
+            </form>
+          )}
+          {!login && authType === 'oauth' && (
+            <button type="button" onClick={() => void startLogin()} disabled={submitting} className="flex h-9 w-full items-center justify-center rounded-md bg-surface-950 text-[13px] font-medium text-white hover:bg-surface-800 disabled:opacity-60 dark:bg-white dark:text-surface-950">
+              {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
+              打开浏览器登录
+            </button>
+          )}
+          {login?.authUrl && (
+            <div className="space-y-2 rounded-md border border-surface-200 px-3 py-2 text-[12px] dark:border-surface-800">
+              <div className="text-surface-500">已打开授权页。若浏览器没有跳转，可手动打开：</div>
+              <a href={login.authUrl} target="_blank" rel="noreferrer" className="block truncate font-mono text-primary-600 hover:underline dark:text-primary-400">{login.authUrl}</a>
+            </div>
+          )}
+          {login?.status === 'need_prompt' && login.prompt && (
+            <form onSubmit={(event) => void submitPrompt(event)} className="space-y-3">
+              <label className="block space-y-1.5">
+                <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{login.prompt.message}</span>
+                {login.prompt.options && login.prompt.options.length > 0 ? (
+                  <select value={promptValue} onChange={(event) => setPromptValue(event.target.value)} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+                    <option value="">请选择</option>
+                    {login.prompt.options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                  </select>
+                ) : (
+                  <input value={promptValue} onChange={(event) => setPromptValue(event.target.value)} placeholder={login.prompt.placeholder || ''} autoFocus className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+                )}
+              </label>
+              <button type="submit" disabled={submitting} className="flex h-9 w-full items-center justify-center rounded-md bg-surface-950 text-[13px] font-medium text-white hover:bg-surface-800 disabled:opacity-60 dark:bg-white dark:text-surface-950">
+                {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
+                继续登录
+              </button>
+            </form>
+          )}
+          {login?.status === 'pending' && <div className="flex items-center text-[12px] text-surface-500"><Loader2 size={14} className="mr-2 animate-spin" />正在等待 Pi 完成授权</div>}
+          {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
         </div>
       </div>
     </div>
@@ -1851,6 +2055,7 @@ function App() {
   const [connectionTests, setConnectionTests] = useState<Record<string, ProviderConnectionTestResult>>({});
   const [editingProvider, setEditingProvider] = useState<ProviderState | null | undefined>(undefined);
   const [credentialProvider, setCredentialProvider] = useState<ProviderState | null>(null);
+  const [loginProvider, setLoginProvider] = useState<ProviderState | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showDeployModal, setShowDeployModal] = useState(false);
 
@@ -1904,6 +2109,18 @@ function App() {
     }
   };
 
+  const handleLogoutProvider = async (provider: ProviderState) => {
+    if (!window.confirm(`确定退出“${provider.name}”的 Pi 原生登录吗？`)) return;
+    try {
+      const response = await logoutNativeProvider(provider.id);
+      setState(response.state);
+      setNotice(`已退出 ${provider.name}`);
+      setError('');
+    } catch (caughtError) {
+      setError(caughtError instanceof ApiError ? caughtError.message : '退出登录失败。');
+    }
+  };
+
   const handleTestProvider = async (provider: ProviderState) => {
     try {
       const response = await testProviderConnection(provider.id);
@@ -1932,7 +2149,7 @@ function App() {
           <div className="mx-auto max-w-[1200px] pb-20">
             {error && <div className="mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
             {notice && <div className="mb-5 flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 size={14} className="mr-2" />{notice}</div>}
-            {activeNav === 'providers' && <ProvidersPage state={state} testResults={connectionTests} onAdd={() => setEditingProvider(null)} onImport={() => setShowImportModal(true)} onRefresh={() => void refreshState()} onTest={(provider) => void handleTestProvider(provider)} onCredential={(provider) => setCredentialProvider(provider)} onEdit={(provider) => setEditingProvider(provider)} onDelete={(provider) => void handleDeleteProvider(provider)} />}
+            {activeNav === 'providers' && <ProvidersPage state={state} testResults={connectionTests} onAdd={() => setEditingProvider(null)} onImport={() => setShowImportModal(true)} onRefresh={() => void refreshState()} onTest={(provider) => void handleTestProvider(provider)} onCredential={(provider) => setCredentialProvider(provider)} onLogin={(provider) => setLoginProvider(provider)} onLogout={(provider) => void handleLogoutProvider(provider)} onEdit={(provider) => setEditingProvider(provider)} onDelete={(provider) => void handleDeleteProvider(provider)} />}
             {activeNav === 'models' && <ModelsPage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
             {activeNav === 'profiles' && <ProfilePage state={state} onStateChanged={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />}
             {activeNav === 'diagnostics' && <DiagnosticsPage state={state} />}
@@ -1941,6 +2158,7 @@ function App() {
       </main>
       <ProviderEditorModal key={editingProvider === undefined ? 'closed' : editingProvider?.id || 'create'} provider={editingProvider} isOpen={editingProvider !== undefined} onClose={() => setEditingProvider(undefined)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
       <ImportPiModal key={showImportModal ? 'import-open' : 'import-closed'} isOpen={showImportModal} onClose={() => setShowImportModal(false)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
+      <NativeLoginModal key={loginProvider?.id || 'login-closed'} provider={loginProvider} isOpen={Boolean(loginProvider)} onClose={() => setLoginProvider(null)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
       <CredentialModal key={credentialProvider?.id || 'credential-closed'} provider={credentialProvider} isOpen={Boolean(credentialProvider)} onClose={() => setCredentialProvider(null)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
       <DeployModal key={showDeployModal ? 'open' : 'closed'} state={state} isOpen={showDeployModal} onClose={() => setShowDeployModal(false)} onApplied={(nextState) => { setState(nextState); setNotice('配置已应用'); setError(''); }} />
     </div>

@@ -8,6 +8,7 @@ import { createGateway } from "./gateway.mjs";
 import { createPiAuthProbe } from "./pi-auth.mjs";
 import { applyLivePiConfig, restoreLivePiBackup } from "./pi-apply.mjs";
 import { readPiModelsConfig, resolvePiAgentDir } from "./pi-import.mjs";
+import { createNativeAuth } from "./pi-native.mjs";
 import { sanitizeConnectionTestUrl, testProviderConnection } from "./provider-test.mjs";
 import { writePiProfile } from "./profile.mjs";
 import { createStore } from "./store.mjs";
@@ -35,6 +36,15 @@ function resolvePiExecutable() {
 const piExecutable = resolvePiExecutable();
 const piAuthProbe = createPiAuthProbe({ executable: piExecutable });
 const store = createStore({ projectRoot, dataDir });
+const nativeAuth = createNativeAuth({
+  executable: piExecutable,
+  agentDir: resolvePiAgentDir(),
+  openUrl: async (url) => {
+    if (process.platform === "darwin") {
+      await new Promise((resolve, reject) => execFile("open", [url], (error) => error ? reject(error) : resolve()));
+    }
+  }
+});
 let piInfo = null;
 let bridgeInfoCache = new Map();
 let gatewayLastEvent = null;
@@ -197,13 +207,17 @@ function nativeAuthDetail(pi) {
   return "Pi 原生认证未就绪";
 }
 
-async function providerPublicState(provider, { forceAuth = false } = {}) {
-  const credentialConfigured = store.credentialConfigured(provider);
-  const nativeAuth = provider.kind === "native-subscription" ? detectPi(provider.piProvider || provider.id, { force: forceAuth }) : null;
+async function providerPublicState(provider, { forceAuth = false, nativeSummary = null } = {}) {
+  const credentialConfigured = provider.kind === "native-subscription"
+    ? Boolean(nativeSummary?.credentialConfigured || detectPi(provider.piProvider || provider.id, { force: forceAuth }).subscriptionReady)
+    : store.credentialConfigured(provider);
+  const piNative = provider.kind === "native-subscription" ? detectPi(provider.piProvider || provider.id, { force: forceAuth }) : null;
   let status = provider.kind === "native-subscription"
-    ? (nativeAuth?.subscriptionReady ? "ready" : "not-configured")
+    ? (credentialConfigured ? "ready" : "not-configured")
     : (credentialConfigured ? "ready" : "not-configured");
-  let detail = provider.kind === "native-subscription" ? nativeAuthDetail(nativeAuth) : "凭据未写入 Manager";
+  let detail = provider.kind === "native-subscription"
+    ? (nativeSummary?.authLabel || nativeAuthDetail(piNative))
+    : "凭据未写入 Manager";
   if (provider.kind === "local-bridge") {
     const bridge = await bridgeStatus(provider);
     if (!bridge.running) {
@@ -229,9 +243,43 @@ async function providerPublicState(provider, { forceAuth = false } = {}) {
   };
 }
 
+async function mergeNativeProviders(providers, { forceAuth = false } = {}) {
+  let nativeSummaries = [];
+  try {
+    nativeSummaries = await nativeAuth.listNativeProviders();
+  } catch {
+    return providers;
+  }
+  const byId = new Map(providers.map((provider) => [provider.id, provider]));
+  const merged = await Promise.all(providers.map((provider) => {
+    const summary = nativeSummaries.find((item) => item.id === provider.id);
+    if (!summary || provider.kind !== "native-subscription") return provider;
+    return {
+      ...provider,
+      credentialConfigured: summary.credentialConfigured,
+      status: summary.credentialConfigured ? "ready" : provider.status,
+      detail: summary.authLabel || provider.detail,
+      authMethods: summary.authMethods
+    };
+  }));
+  for (const summary of nativeSummaries) {
+    if (byId.has(summary.id)) continue;
+    merged.push({
+      ...summary,
+      credentialConfigured: summary.credentialConfigured,
+      status: summary.credentialConfigured ? "ready" : "not-configured",
+      detail: summary.authLabel || (summary.credentialConfigured ? "Pi 原生认证已就绪" : "尚未完成 Pi 原生授权")
+    });
+  }
+  return merged;
+}
+
 async function publicState({ forceAuth = false } = {}) {
   const current = store.get();
-  const providers = await Promise.all(current.providers.map((provider) => providerPublicState(provider, { forceAuth })));
+  const providers = await mergeNativeProviders(
+    await Promise.all(current.providers.map((provider) => providerPublicState(provider, { forceAuth }))),
+    { forceAuth }
+  );
   const activeProvider = providers.find((provider) => provider.id === current.active.providerId);
   const activeModel = activeProvider?.models.find((model) => model.id === current.active.modelId);
   const gatewayStats = gateway.getStats();
@@ -456,6 +504,48 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
     await ensureCycleListReady();
     const profile = applyProfile();
     sendJson(res, 200, { ok: true, profile, state: await publicState() });
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/pi/login") {
+    const body = await parseBody(req);
+    const result = await nativeAuth.login({
+      providerId: body.providerId,
+      type: body.type,
+      apiKey: body.apiKey
+    });
+    if (result.status === "completed") {
+      const summaries = await nativeAuth.listNativeProviders();
+      const summary = summaries.find((item) => item.id === body.providerId);
+      if (summary) store.upsertNativeProvider(summary);
+      piAuthProbe.clear(body.providerId);
+    }
+    sendJson(res, 200, { ok: true, login: result, state: await publicState({ forceAuth: true }) });
+    return;
+  }
+  if (req.method === "GET" && pathname.startsWith("/api/pi/login/")) {
+    const loginId = pathname.split("/")[4];
+    const result = await nativeAuth.loginStatus(loginId);
+    if (result.status === "completed") {
+      const summaries = await nativeAuth.listNativeProviders();
+      const summary = summaries.find((item) => item.id === result.providerId);
+      if (summary) store.upsertNativeProvider(summary);
+      piAuthProbe.clear(result.providerId);
+    }
+    sendJson(res, 200, { ok: true, login: result, state: await publicState({ forceAuth: true }) });
+    return;
+  }
+  if (req.method === "POST" && pathname.startsWith("/api/pi/login/") && pathname.endsWith("/prompt")) {
+    const loginId = pathname.split("/")[4];
+    const body = await parseBody(req);
+    const result = nativeAuth.answerPrompt(loginId, body.value);
+    sendJson(res, 200, { ok: true, login: result, state: await publicState() });
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/pi/logout") {
+    const body = await parseBody(req);
+    const result = await nativeAuth.logout(body.providerId);
+    piAuthProbe.clear(body.providerId);
+    sendJson(res, 200, { ok: true, result, state: await publicState({ forceAuth: true }) });
     return;
   }
   if (req.method === "POST" && pathname === "/api/pi/live-import") {

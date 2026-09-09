@@ -42,6 +42,10 @@ Provider connection testing
 Pi native auth status
   -> provider-specific `pi auth check --provider`
   -> short-lived cached, credential-free status used by cards, route validation and connection tests
+
+Pi native login
+  -> POST /api/pi/login + ModelRuntime.login
+  -> OAuth / API key writes to the live Pi auth.json without copying refresh tokens
 ```
 
 The implementation uses the existing card layout from the prototype as the
@@ -80,6 +84,9 @@ new decision if the information is intentionally folded into the provider page.
 - Detect each native provider's Pi authentication state independently and
   refresh it after the short cache window without exposing credentials; an
   explicit UI refresh or connection test forces a fresh probe.
+- Log in to featured Pi-native providers from the provider cards using the
+  official ModelRuntime login path; API keys and OAuth tokens stay in Pi
+  auth.json and are never copied into Manager state.
 - Keep provider cards focused on connection resources; configure the default
   provider, model and thinking level from the model resource page.
 - Edit the Ctrl+P cycling list with ordered add/remove/reorder controls and
@@ -104,7 +111,6 @@ new decision if the information is intentionally folded into the provider page.
 
 ## Deferred
 
-- Pi-native OAuth/API login UI and auth import;
 - profile diff preview and process ownership;
 - real provider model discovery;
 - Antigravity adapter.

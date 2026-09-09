@@ -38,6 +38,7 @@ export interface ProviderState {
   credentialConfigured: boolean;
   status: ProviderStatus;
   detail: string;
+  authMethods?: Array<'oauth' | 'api_key'>;
   models: ModelDefinition[];
 }
 
