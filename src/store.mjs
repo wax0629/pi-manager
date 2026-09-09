@@ -37,6 +37,10 @@ function isEditableCustomProvider(provider) {
     && !isBuiltinProviderId(provider.id);
 }
 
+function canConfigureProviderCredential(provider) {
+  return Boolean(provider) && provider.kind !== "native-subscription";
+}
+
 function assertHttpUrl(value) {
   let normalizedUrl;
   try {
@@ -260,18 +264,19 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
     setCredential(providerId, value) {
       const provider = store.provider(providerId);
       if (!provider) throw new Error("渠道不存在");
+      if (!canConfigureProviderCredential(provider)) throw new Error("原生订阅渠道请使用 Pi 登录，不能在此配置 API key");
       const result = setSecret({ dataDir, providerId, value });
       store.touchConfiguration();
       store.recordEvent("credential", `已更新 ${provider.name} 凭据`, result.storage);
       return result;
     },
     deleteCredential(providerId) {
-      deleteSecret({ dataDir, providerId });
       const provider = store.provider(providerId);
-      if (provider) {
-        store.touchConfiguration();
-        store.recordEvent("credential", `已移除 ${provider.name} 凭据`, "");
-      }
+      if (!provider) throw new Error("渠道不存在");
+      if (!canConfigureProviderCredential(provider)) throw new Error("原生订阅渠道请使用 Pi 登录，不能在此配置 API key");
+      deleteSecret({ dataDir, providerId });
+      store.touchConfiguration();
+      store.recordEvent("credential", `已移除 ${provider.name} 凭据`, "");
     },
     touchConfiguration() {
       state.runtime.configRevision += 1;
@@ -466,4 +471,4 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
   return store;
 }
 
-export { safeId, writeJsonAtomic, isBuiltinProviderId, isEditableCustomProvider };
+export { safeId, writeJsonAtomic, isBuiltinProviderId, isEditableCustomProvider, canConfigureProviderCredential };

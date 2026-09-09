@@ -62,6 +62,19 @@ export async function updateProvider(providerId: string, input: UpdateProviderIn
   });
 }
 
+export async function setProviderCredential(providerId: string, value: string): Promise<StateResponse> {
+  return request<StateResponse>(`/api/providers/${encodeURIComponent(providerId)}/credential`, {
+    method: 'POST',
+    body: JSON.stringify({ value }),
+  });
+}
+
+export async function deleteProviderCredential(providerId: string): Promise<StateResponse> {
+  return request<StateResponse>(`/api/providers/${encodeURIComponent(providerId)}/credential`, {
+    method: 'DELETE',
+  });
+}
+
 export async function deleteProvider(providerId: string): Promise<StateResponse> {
   return request<StateResponse>(`/api/providers/${encodeURIComponent(providerId)}`, {
     method: 'DELETE',

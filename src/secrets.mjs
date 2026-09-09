@@ -51,27 +51,32 @@ export function readDotEnvValue(filePath, key) {
   return "";
 }
 
-export function getSecret({ dataDir, provider }) {
-  const envValue = provider.credentialEnv ? process.env[provider.credentialEnv] : "";
-  if (envValue) return envValue;
-
-  if (provider.id === "antigravity" && provider.bridgePath) {
-    const bridgeValue = readDotEnvValue(path.join(provider.bridgePath, ".env"), provider.credentialEnv || "API_KEY");
-    if (bridgeValue) return bridgeValue;
-  }
-
+export function getStoredSecret({ dataDir, providerId }) {
   if (canUseKeychain()) {
     try {
-      return execFileSync("security", ["find-generic-password", "-a", provider.id, "-s", KEYCHAIN_SERVICE, "-w"], {
+      const stored = execFileSync("security", ["find-generic-password", "-a", providerId, "-s", KEYCHAIN_SERVICE, "-w"], {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"]
       }).trim();
+      if (stored) return stored;
     } catch {
       // Fall through to the local permission-hardened file.
     }
   }
+  return readFallback(dataDir)[providerId] || "";
+}
 
-  return readFallback(dataDir)[provider.id] || "";
+export function getSecret({ dataDir, provider }) {
+  const envValue = provider.credentialEnv ? process.env[provider.credentialEnv] : "";
+  if (envValue) return envValue;
+
+  const stored = getStoredSecret({ dataDir, providerId: provider.id });
+  if (stored) return stored;
+
+  if (provider.id === "antigravity" && provider.bridgePath) {
+    return readDotEnvValue(path.join(provider.bridgePath, ".env"), provider.credentialEnv || "API_KEY");
+  }
+  return "";
 }
 
 export function setSecret({ dataDir, providerId, value }) {
