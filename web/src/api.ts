@@ -88,6 +88,19 @@ export async function deleteProviderCredential(providerId: string): Promise<Stat
   });
 }
 
+export async function addProviderModel(providerId: string, model: { id: string; name?: string; reasoning?: boolean }): Promise<StateResponse> {
+  return request<StateResponse>(`/api/providers/${encodeURIComponent(providerId)}/models`, {
+    method: 'POST',
+    body: JSON.stringify({ model }),
+  });
+}
+
+export async function deleteProviderModel(providerId: string, modelId: string): Promise<StateResponse> {
+  return request<StateResponse>(`/api/providers/${encodeURIComponent(providerId)}/models/${encodeURIComponent(modelId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function deleteProvider(providerId: string): Promise<StateResponse> {
   return request<StateResponse>(`/api/providers/${encodeURIComponent(providerId)}`, {
     method: 'DELETE',

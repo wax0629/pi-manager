@@ -117,6 +117,37 @@ test("manager-stored antigravity credentials take precedence over bridge env fil
   assert.equal(store.credentialConfigured(store.provider("antigravity")), true);
 });
 
+test("custom provider catalogs can add and remove models without dropping the default route", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  store.addProvider({
+    id: "demo-relay",
+    name: "Demo Relay",
+    baseUrl: "https://relay.example.test/v1",
+    models: ["keep-model", "drop-model"]
+  });
+  store.updateCycleList(["demo-relay/keep-model", "demo-relay/drop-model", "qiniu/grok-4.6"]);
+
+  const added = store.addProviderModel({
+    providerId: "demo-relay",
+    model: { id: "plus-model", name: "Plus Model", reasoning: true, contextWindow: 64000 }
+  });
+  assert.equal(added.id, "plus-model");
+  assert.equal(store.provider("demo-relay").models.some((model) => model.id === "plus-model"), true);
+
+  store.removeProviderModel({ providerId: "demo-relay", modelId: "drop-model" });
+  assert.equal(store.provider("demo-relay").models.some((model) => model.id === "drop-model"), false);
+  assert.deepEqual(store.get().cycle.modelRefs, ["demo-relay/keep-model", "qiniu/grok-4.6"]);
+
+  store.setActive({ providerId: "demo-relay", modelId: "keep-model", thinking: "off" });
+  assert.throws(
+    () => store.removeProviderModel({ providerId: "demo-relay", modelId: "keep-model" }),
+    /不能删除当前默认模型/
+  );
+  assert.throws(() => store.addProviderModel({ providerId: "qiniu", model: { id: "nope" } }), /内置渠道不能增删模型/);
+  assert.throws(() => store.removeProviderModel({ providerId: "qiniu", modelId: "grok-4.6" }), /内置渠道不能增删模型/);
+});
+
 test("custom provider validation rejects unsupported URLs and empty model lists", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);

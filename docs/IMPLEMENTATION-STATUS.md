@@ -86,6 +86,8 @@ new decision if the information is intentionally folded into the provider page.
   persist it as enabledModels in the generated profile.
 - Edit each complete-catalog model's context window and inject the value into
   the generated Pi model definition.
+- Add or remove models in a custom provider's complete catalog, while cleaning
+  cycle-list refs and refusing to delete the active default model.
 - Edit thinking-level mappings with Pi-level vs upstream-value vs unsupported
   states, then persist them through the manager state and profile generator.
 - Apply, launch, stop and roll back the isolated profile from the Profile page.
