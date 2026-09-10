@@ -1,6 +1,6 @@
 {
   "name": "@wax0629/pi-manager",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local control plane for Pi: providers, models, and live import into ~/.pi/agent.",
   "type": "module",
   "bin": {
