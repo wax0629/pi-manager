@@ -1905,22 +1905,23 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
   const currentActiveProvider = state.providers.find((provider) => provider.id === state.active.providerId);
   const appliedActiveProvider = appliedSnapshot?.providers?.find((provider) => provider.id === appliedSnapshot.active?.providerId);
 
-  const currentRows = [
-    { label: '目标项目', value: state.targetProject },
-    { label: '默认模型', value: `${state.active.providerId}/${state.active.modelId}` },
-    { label: 'Thinking', value: state.active.thinking },
-    { label: '凭据引用', value: currentActiveProvider ? `${currentActiveProvider.name} · ${currentActiveProvider.credentialConfigured ? '已配置' : '未配置'}` : '未选择' },
-    { label: '循环列表', value: state.cycle.modelRefs.join(' / ') || '空' },
-    { label: '网关', value: `${state.gateway.host}:${state.gateway.port} · ${state.gateway.enabled ? '启用' : '关闭'}` },
-  ];
-
-  const appliedRows = [
-    { label: '目标项目', value: appliedSnapshot?.targetProject || '尚未应用' },
-    { label: '默认模型', value: appliedSnapshot?.active ? `${appliedSnapshot.active.providerId}/${appliedSnapshot.active.modelId}` : '尚未应用' },
-    { label: 'Thinking', value: appliedSnapshot?.active?.thinking || '尚未应用' },
-    { label: '凭据引用', value: appliedActiveProvider ? `${appliedActiveProvider.name} · ${appliedActiveProvider.credentialConfigured ? '已配置' : '未配置'}` : '尚未应用' },
-    { label: '循环列表', value: appliedSnapshot?.cycle?.modelRefs?.join(' / ') || '尚未应用' },
-    { label: '网关', value: appliedSnapshot?.gateway ? `${appliedSnapshot.gateway.host}:${appliedSnapshot.gateway.port} · ${appliedSnapshot.gateway.enabled ? '启用' : '关闭'}` : '尚未应用' },
+  const summarizeCycle = (refs: string[] | undefined, empty: string) => {
+    const list = (refs || []).filter(Boolean);
+    if (list.length === 0) return { text: empty, title: empty };
+    return {
+      text: `${list.length} 项 · ${list[0]}${list.length > 1 ? ' 等' : ''}`,
+      title: list.join(' / '),
+    };
+  };
+  const currentCycle = summarizeCycle(state.cycle.modelRefs, '空');
+  const appliedCycle = summarizeCycle(appliedSnapshot?.cycle?.modelRefs, '尚未应用');
+  const statusRows = [
+    { label: '目标项目', current: state.targetProject, applied: appliedSnapshot?.targetProject || '尚未应用' },
+    { label: '默认模型', current: `${state.active.providerId}/${state.active.modelId}`, applied: appliedSnapshot?.active ? `${appliedSnapshot.active.providerId}/${appliedSnapshot.active.modelId}` : '尚未应用' },
+    { label: 'Thinking', current: state.active.thinking, applied: appliedSnapshot?.active?.thinking || '尚未应用' },
+    { label: '凭据', current: currentActiveProvider ? `${currentActiveProvider.name} · ${currentActiveProvider.credentialConfigured ? '已配置' : '未配置'}` : '未选择', applied: appliedActiveProvider ? `${appliedActiveProvider.name} · ${appliedActiveProvider.credentialConfigured ? '已配置' : '未配置'}` : '尚未应用' },
+    { label: '循环列表', current: currentCycle.text, currentTitle: currentCycle.title, applied: appliedCycle.text, appliedTitle: appliedCycle.title },
+    { label: '网关', current: `${state.gateway.host}:${state.gateway.port} · ${state.gateway.enabled ? '启用' : '关闭'}`, applied: appliedSnapshot?.gateway ? `${appliedSnapshot.gateway.host}:${appliedSnapshot.gateway.port} · ${appliedSnapshot.gateway.enabled ? '启用' : '关闭'}` : '尚未应用' },
   ];
 
   const applyNow = async () => {
@@ -2019,60 +2020,66 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
-        <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
+        <div className="min-w-0 overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
           <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
             <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">当前状态</h2>
             <p className="mt-1 text-[12px] text-surface-500">这部分显示候选配置、已应用配置和 profile 位置。</p>
           </div>
-          <div className="grid gap-4 p-5 md:grid-cols-2">
-            <div className="rounded-lg border border-surface-200 p-4 dark:border-surface-800">
-              <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Save size={15} /> 候选配置</div>
-              <dl className="space-y-2 text-[12px]">
-                {currentRows.map((row) => (
-                  <div key={row.label} className="flex justify-between gap-4">
-                    <dt className="text-surface-500">{row.label}</dt>
-                    <dd className="max-w-[220px] truncate font-mono text-surface-900 dark:text-white" title={row.value}>{row.value}</dd>
-                  </div>
+          <div className="overflow-x-auto p-5">
+            <table className="w-full min-w-[520px] text-left text-[12px]">
+              <thead className="text-[11px] font-medium text-surface-500">
+                <tr>
+                  <th className="w-[88px] pb-3 pr-3 font-medium">项目</th>
+                  <th className="pb-3 pr-3 font-medium"><span className="inline-flex items-center gap-1.5 text-surface-700 dark:text-surface-200"><Save size={13} />候选配置</span></th>
+                  <th className="pb-3 font-medium"><span className="inline-flex items-center gap-1.5 text-surface-700 dark:text-surface-200"><CheckCircle2 size={13} />已应用配置</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-100 dark:divide-surface-800/60">
+                {statusRows.map((row) => (
+                  <tr key={row.label}>
+                    <th className="whitespace-nowrap py-2.5 pr-3 align-top font-medium text-surface-500">{row.label}</th>
+                    <td className="min-w-0 py-2.5 pr-3 align-top font-mono text-surface-900 dark:text-white" title={row.currentTitle || row.current}><span className="block truncate">{row.current}</span></td>
+                    <td className="min-w-0 py-2.5 align-top font-mono text-surface-900 dark:text-white" title={row.appliedTitle || row.applied}><span className="block truncate">{row.applied}</span></td>
+                  </tr>
                 ))}
-              </dl>
-            </div>
-            <div className="rounded-lg border border-surface-200 p-4 dark:border-surface-800">
-              <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><CheckCircle2 size={15} /> 已应用配置</div>
-              <dl className="space-y-2 text-[12px]">
-                {appliedRows.map((row) => (
-                  <div key={row.label} className="flex justify-between gap-4">
-                    <dt className="text-surface-500">{row.label}</dt>
-                    <dd className="max-w-[220px] truncate font-mono text-surface-900 dark:text-white" title={row.value}>{row.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
+              </tbody>
+            </table>
           </div>
-          <div className="grid gap-3 border-t border-surface-100 bg-surface-50/50 px-5 py-4 dark:border-surface-800 dark:bg-surface-900/20 md:grid-cols-3 xl:grid-cols-6">
-            <button type="button" onClick={() => void applyNow()} disabled={applying} className="inline-flex items-center justify-center rounded-md border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-700 hover:bg-surface-50 disabled:cursor-wait disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800">
-              {applying ? <Loader2 size={14} className="mr-2 animate-spin" /> : <CheckCircle2 size={14} className="mr-2" />}
-              应用隔离 Profile
-            </button>
-            <button type="button" onClick={() => void importLiveNow()} disabled={importingLive} className="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-wait disabled:opacity-60">
-              {importingLive ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Download size={14} className="mr-2" />}
-              导入本机 Pi
-            </button>
-            <button type="button" onClick={() => void launchNow()} disabled={launching} className="inline-flex items-center justify-center rounded-md border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-wait disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
-              {launching ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Play size={14} className="mr-2" />}
-              应用并启动
-            </button>
-            <button type="button" onClick={() => void stopNow()} disabled={stopping || !state.runtime.lastLaunchPid} className="inline-flex items-center justify-center rounded-md border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
-              {stopping ? <Loader2 size={14} className="mr-2 animate-spin" /> : <X size={14} className="mr-2" />}
-              停止 Pi
-            </button>
-            <button type="button" onClick={() => void rollbackNow()} disabled={rollingBack || !state.runtime.appliedSnapshot} className="inline-flex items-center justify-center rounded-md border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
-              {rollingBack ? <Loader2 size={14} className="mr-2 animate-spin" /> : <RotateCcw size={14} className="mr-2" />}
-              回滚隔离 Profile
-            </button>
-            <button type="button" onClick={() => void rollbackLiveNow()} disabled={rollingLive || !state.runtime.lastLiveBackupDir} className="inline-flex items-center justify-center rounded-md border border-surface-200 px-4 py-2 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
-              {rollingLive ? <Loader2 size={14} className="mr-2 animate-spin" /> : <RotateCcw size={14} className="mr-2" />}
-              回滚本机 Pi
-            </button>
+          <div className="space-y-3 border-t border-surface-100 bg-surface-50/50 px-5 py-4 dark:border-surface-800 dark:bg-surface-900/20">
+            <div>
+              <p className="mb-2 text-[11px] text-surface-500">本机 Pi · 普通 pi 命令会读到</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => void importLiveNow()} disabled={importingLive} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md bg-primary-600 px-3 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-wait disabled:opacity-60">
+                  {importingLive ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Download size={14} className="mr-2" />}
+                  导入本机 Pi
+                </button>
+                <button type="button" onClick={() => void rollbackLiveNow()} disabled={rollingLive || !state.runtime.lastLiveBackupDir} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-surface-200 px-3 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
+                  {rollingLive ? <Loader2 size={14} className="mr-2 animate-spin" /> : <RotateCcw size={14} className="mr-2" />}
+                  回滚本机 Pi
+                </button>
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-[11px] text-surface-500">隔离 Profile · 试跑，普通 pi 读不到</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => void applyNow()} disabled={applying} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-surface-200 px-3 text-[13px] font-medium text-surface-700 hover:bg-surface-50 disabled:cursor-wait disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800">
+                  {applying ? <Loader2 size={14} className="mr-2 animate-spin" /> : <CheckCircle2 size={14} className="mr-2" />}
+                  应用隔离 Profile
+                </button>
+                <button type="button" onClick={() => void launchNow()} disabled={launching} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-surface-200 px-3 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-wait disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
+                  {launching ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Play size={14} className="mr-2" />}
+                  应用并启动
+                </button>
+                <button type="button" onClick={() => void stopNow()} disabled={stopping || !state.runtime.lastLaunchPid} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-surface-200 px-3 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
+                  {stopping ? <Loader2 size={14} className="mr-2 animate-spin" /> : <X size={14} className="mr-2" />}
+                  停止 Pi
+                </button>
+                <button type="button" onClick={() => void rollbackNow()} disabled={rollingBack || !state.runtime.appliedSnapshot} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-surface-200 px-3 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
+                  {rollingBack ? <Loader2 size={14} className="mr-2 animate-spin" /> : <RotateCcw size={14} className="mr-2" />}
+                  回滚隔离 Profile
+                </button>
+              </div>
+            </div>
           </div>
           {actionError && <div className="mx-5 mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{actionError}</div>}
         </div>
