@@ -4,19 +4,34 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { browserCommand, hasWebUi, isCliEntrypoint, parseCliArgs, publicUrl } from "../src/cli.mjs";
+import { browserCommand, CLI_MESSAGES, cliLocale, cliMessage, hasWebUi, isCliEntrypoint, parseCliArgs, publicUrl } from "../src/cli.mjs";
+
+const EN = { LANG: "en_US.UTF-8", PI_MANAGER_LANG: "" };
+const ZH = { LANG: "zh_CN.UTF-8", PI_MANAGER_LANG: "zh" };
 
 test("parses host, port and no-open flags", () => {
-  assert.deepEqual(parseCliArgs(["--host", "127.0.0.1", "--port", "9000", "--no-open"]), {
+  assert.deepEqual(parseCliArgs(["--host", "127.0.0.1", "--port", "9000", "--no-open"], EN), {
     host: "127.0.0.1",
     port: 9000,
     open: false,
     help: false
   });
-  assert.equal(parseCliArgs(["--help"]).help, true);
-  assert.equal(parseCliArgs(["--port=8671"]).port, 8671);
-  assert.throws(() => parseCliArgs(["--port", "nope"]), /无效端口/);
-  assert.throws(() => parseCliArgs(["--wat"]), /未知参数/);
+  assert.equal(parseCliArgs(["--help"], EN).help, true);
+  assert.equal(parseCliArgs(["--port=8671"], EN).port, 8671);
+  assert.throws(() => parseCliArgs(["--port", "nope"], EN), /Invalid port/);
+  assert.throws(() => parseCliArgs(["--wat"], EN), /Unknown argument/);
+  assert.throws(() => parseCliArgs(["--port", "nope"], ZH), /无效端口/);
+  assert.throws(() => parseCliArgs(["--wat"], ZH), /未知参数/);
+});
+
+test("CLI locale follows PI_MANAGER_LANG then LANG", () => {
+  assert.equal(cliLocale({ PI_MANAGER_LANG: "zh", LANG: "en_US.UTF-8" }), "zh");
+  assert.equal(cliLocale({ PI_MANAGER_LANG: "en", LANG: "zh_CN.UTF-8" }), "en");
+  assert.equal(cliLocale({ LANG: "zh_CN.UTF-8" }), "zh");
+  assert.equal(cliLocale({ LANG: "en_US.UTF-8" }), "en");
+  assert.match(cliMessage("help", undefined, EN), /local control plane/);
+  assert.match(cliMessage("help", undefined, ZH), /本地控制面/);
+  assert.deepEqual(Object.keys(CLI_MESSAGES.zh).sort(), Object.keys(CLI_MESSAGES.en).sort());
 });
 
 test("detects a built web UI by index.html", () => {

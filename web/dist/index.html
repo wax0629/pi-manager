@@ -1,15 +1,26 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pi Manager</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('pi-manager.locale');
+          var locale = saved === 'zh' || saved === 'en'
+            ? saved
+            : String(navigator.language || '').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
+          document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en';
+        } catch (error) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="/assets/index-CW8mUwad.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-Dnr7dLeF.css">
+    <script type="module" crossorigin src="/assets/index-CtR4UAiG.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CeY8YAN4.css">
   </head>
   <body>
     <div id="root"></div>

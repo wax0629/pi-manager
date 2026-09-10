@@ -37,6 +37,8 @@ pi-manager
 
 会起 `http://127.0.0.1:8670` 并打开浏览器。`pi-manager --help` 看 `--port` / `--host` / `--no-open`。端口已被占用时，会打开已有实例，不报崩。
 
+界面语言跟浏览器走（`zh*` 中文，否则英文），侧栏可切换，选择会记住。CLI 文案跟 `PI_MANAGER_LANG` / `LANG` 走，默认英文。
+
 从源码跑（开发）：
 
 ```bash
