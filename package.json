@@ -2,7 +2,7 @@
   "name": "pi-manager",
   "version": "0.1.0",
   "private": true,
-  "description": "A local control plane for Pi providers, profiles, and gateway routing.",
+  "description": "Local control plane for Pi: providers, models, and live import into ~/.pi/agent.",
   "type": "module",
   "scripts": {
     "start": "node src/server.mjs",
