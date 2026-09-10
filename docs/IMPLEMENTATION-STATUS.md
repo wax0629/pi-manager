@@ -35,6 +35,8 @@ Does not fork Pi. Does not modify a user's project `.pi`.
 - Import candidate config into `~/.pi/agent` after a Manager-owned backup,
   verify with `pi --list-models --offline`, and roll back from that backup.
 - Serve `web/dist` from the Node server; Vite proxies `/api` in development.
+- CLI entry `pi-manager` / `npx pi-manager` starts the API, serves `web/dist`,
+  and opens the browser. Occupied ports reopen the existing instance.
 
 ## Removed from the UI
 
@@ -44,6 +46,8 @@ Backend endpoints still exist and are leftover cleanup.
 ## Deferred
 
 - strip isolated profile backend (`/api/apply`, launch, stop);
+- npm publish (the unscoped `pi-manager` name was unpublished in 2022);
+- listing on pi.dev/packages (that gallery is extensions/skills/themes only);
 - automatic background catalog refresh;
 - Antigravity adapter.
 
