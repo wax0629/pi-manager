@@ -720,7 +720,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">上游模型目录</span>
-                  <p className="mt-0.5 text-[11px] text-surface-500">获取后勾选并编辑；也可以手工填写。</p>
+                  <p className="mt-0.5 text-[11px] text-surface-500">获取后勾选并编辑；右边的「思考」表示这个模型能否开 Thinking。</p>
                 </div>
                 <button type="button" onClick={() => void discover()} disabled={discovering} className="inline-flex h-8 shrink-0 items-center rounded-md border border-surface-200 px-3 text-[12px] font-medium text-surface-700 hover:bg-surface-50 disabled:cursor-wait disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800">
                   {discovering && <Loader2 size={13} className="mr-1.5 animate-spin" />}
@@ -739,7 +739,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
                     <input type="checkbox" checked={selectedModelIds.includes(model.id)} onChange={(event) => setSelectedModelIds((current) => event.target.checked ? [...current, model.id] : current.filter((id) => id !== model.id))} aria-label={`选择 ${model.id}`} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
                     <input value={model.id} onChange={(event) => updateDiscoveredModel(model.id, { id: event.target.value })} aria-label={`${model.id} 模型 ID`} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 font-mono text-[12px] text-surface-900 outline-none focus:border-surface-300 focus:bg-white dark:text-white dark:focus:border-surface-600 dark:focus:bg-surface-900" />
                     <input value={model.name} onChange={(event) => updateDiscoveredModel(model.id, { name: event.target.value })} aria-label={`${model.id} 显示名称`} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 text-[12px] text-surface-700 outline-none focus:border-surface-300 focus:bg-white dark:text-surface-200 dark:focus:border-surface-600 dark:focus:bg-surface-900" />
-                    <label className="flex shrink-0 items-center gap-1 text-[10px] text-surface-400"><input type="checkbox" checked={model.reasoning} onChange={(event) => updateDiscoveredModel(model.id, { reasoning: event.target.checked })} />思考</label>
+                    <label className="flex shrink-0 items-center gap-1 text-[10px] text-surface-400" title="勾选后可在模型页配置 Thinking 等级；未勾选则只能关闭思考。"><input type="checkbox" checked={model.reasoning} onChange={(event) => updateDiscoveredModel(model.id, { reasoning: event.target.checked })} aria-label={`${model.id} 支持 Thinking`} />思考</label>
                   </div>
                 ))}
                 {visibleDiscoveredModels.length === 0 && <p className="px-2 py-3 text-[11px] text-surface-500">没有匹配的上游模型。</p>}

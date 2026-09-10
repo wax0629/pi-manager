@@ -41,6 +41,47 @@ test("discovers models with a bearer key and never exposes it in the result", as
   assert.equal(result.detail, "https://relay.example.test/v1/models");
 });
 
+test("retries /v1/models when the root path returns HTML or 404", async () => {
+  const htmlRequests = [];
+  const html = await discoverProviderModels({
+    baseUrl: "https://api.centos.hk",
+    apiKey: "secret-api-key",
+    fetchImpl: async (url) => {
+      htmlRequests.push(String(url));
+      if (String(url).endsWith("/v1/models")) {
+        return response({ data: [{ id: "gpt-a", reasoning: true }] });
+      }
+      return new Response("<!DOCTYPE html>", {
+        status: 200,
+        headers: { "content-type": "text/html" }
+      });
+    }
+  });
+  assert.deepEqual(htmlRequests, [
+    "https://api.centos.hk/models",
+    "https://api.centos.hk/v1/models"
+  ]);
+  assert.equal(html.ok, true);
+  assert.equal(html.models[0].id, "gpt-a");
+  assert.equal(JSON.stringify(html).includes("secret-api-key"), false);
+
+  const missingRequests = [];
+  const missing = await discoverProviderModels({
+    baseUrl: "https://relay.example.test",
+    fetchImpl: async (url) => {
+      missingRequests.push(String(url));
+      if (String(url).endsWith("/v1/models")) return response({ data: [{ id: "gpt-b" }] });
+      return response({}, 404);
+    }
+  });
+  assert.deepEqual(missingRequests, [
+    "https://relay.example.test/models",
+    "https://relay.example.test/v1/models"
+  ]);
+  assert.equal(missing.ok, true);
+  assert.equal(missing.models[0].id, "gpt-b");
+});
+
 test("returns actionable errors for auth, missing endpoint and invalid JSON", async () => {
   const auth = await discoverProviderModels({
     baseUrl: "https://relay.example.test/v1",
