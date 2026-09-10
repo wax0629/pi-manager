@@ -151,12 +151,21 @@ export interface ManagerState {
   events: ManagerEvent[];
 }
 
+export interface ProviderModelInput {
+  id: string;
+  name?: string;
+  reasoning?: boolean;
+  input?: string[];
+  contextWindow?: number;
+  maxTokens?: number;
+}
+
 export interface CreateProviderInput {
   id?: string;
   name: string;
   baseUrl: string;
   kind: 'openai-api';
-  models: string[];
+  models: Array<string | ProviderModelInput>;
   apiKey?: string;
 }
 
@@ -164,8 +173,28 @@ export interface UpdateProviderInput {
   id?: string;
   name?: string;
   baseUrl?: string;
-  models?: string[];
+  models?: Array<string | ProviderModelInput>;
   apiKey?: string;
+}
+
+export interface DiscoveredModel {
+  id: string;
+  name: string;
+  reasoning: boolean;
+  input: string[];
+  contextWindow?: number;
+  maxTokens?: number;
+  ownedBy?: string;
+}
+
+export interface ProviderDiscoveryResult {
+  ok: boolean;
+  category: ProviderConnectionTestResult['category'];
+  message: string;
+  detail: string;
+  status: number;
+  durationMs: number;
+  models: DiscoveredModel[];
 }
 
 export interface StateResponse {

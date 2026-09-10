@@ -5,6 +5,7 @@ import type {
   PiImportPreview,
   PiImportResult,
   ProviderConnectionTestResult,
+  ProviderDiscoveryResult,
   ProviderState,
   StateResponse,
   UpdateProviderInput,
@@ -64,6 +65,13 @@ export async function importPiProviders(overwrite = false, providerIds: string[]
 
 export async function listFeaturedNativeProviders(): Promise<{ ok: true; providers: ProviderState[] }> {
   return request<{ ok: true; providers: ProviderState[] }>('/api/pi/native-providers');
+}
+
+export async function discoverProviderModels(input: { baseUrl: string; apiKey?: string }): Promise<{ ok: true; result: ProviderDiscoveryResult }> {
+  return request<{ ok: true; result: ProviderDiscoveryResult }>('/api/providers/discover', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
 }
 
 export async function createProvider(input: CreateProviderInput): Promise<CreateProviderResponse> {

@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createGateway } from "./gateway.mjs";
 import { createPiAuthProbe } from "./pi-auth.mjs";
+import { discoverProviderModels } from "./provider-discovery.mjs";
 import { applyLivePiConfig, restoreLivePiBackup } from "./pi-apply.mjs";
 import { readPiModelsConfig, resolvePiAgentDir } from "./pi-import.mjs";
 import { createNativeAuth } from "./pi-native.mjs";
@@ -651,6 +652,15 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
       providerIds: body.providerIds
     });
     sendJson(res, 200, { ok: true, result, state: await publicState() });
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/providers/discover") {
+    const body = await parseBody(req);
+    const result = await discoverProviderModels({
+      baseUrl: body.baseUrl,
+      apiKey: body.apiKey
+    });
+    sendJson(res, 200, { ok: true, result });
     return;
   }
   if (req.method === "POST" && pathname === "/api/providers") {
