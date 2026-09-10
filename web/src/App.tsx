@@ -187,8 +187,8 @@ function Sidebar({ activeNav, onNavigate, piInstalled }: { activeNav: NavId; onN
               type="button"
               onClick={() => onNavigate(item.id)}
               className={`flex w-full items-center rounded-md px-3 py-2 text-left text-[13px] font-medium transition-colors ${activeNav === item.id
-                ? 'bg-surface-200/50 text-surface-900 dark:bg-surface-800 dark:text-surface-50'
-                : 'text-surface-500 hover:bg-surface-200/30 hover:text-surface-900 dark:hover:bg-surface-900 dark:hover:text-surface-50'}`}
+                ? 'bg-surface-100 text-surface-900 dark:bg-surface-800 dark:text-surface-50'
+                : 'text-surface-500 hover:bg-surface-100 hover:text-surface-900 dark:hover:bg-surface-900 dark:hover:text-surface-50'}`}
             >
               <span className={`mr-2.5 ${activeNav === item.id ? 'text-surface-900 dark:text-white' : 'opacity-70'}`}>{item.icon}</span>
               {item.label}
@@ -201,32 +201,34 @@ function Sidebar({ activeNav, onNavigate, piInstalled }: { activeNav: NavId; onN
           type="button"
           onClick={() => onNavigate('diagnostics')}
           className={`flex w-full items-center rounded-md px-3 py-2 text-left text-[13px] font-medium transition-colors ${activeNav === 'diagnostics'
-            ? 'bg-surface-200/50 text-surface-900 dark:bg-surface-800 dark:text-surface-50'
-            : 'text-surface-500 hover:bg-surface-200/30 hover:text-surface-900 dark:hover:bg-surface-900 dark:hover:text-surface-50'}`}
+            ? 'bg-surface-100 text-surface-900 dark:bg-surface-800 dark:text-surface-50'
+            : 'text-surface-500 hover:bg-surface-100 hover:text-surface-900 dark:hover:bg-surface-900 dark:hover:text-surface-50'}`}
         >
           <span className="mr-2.5 opacity-70"><Activity size={16} strokeWidth={2.3} /></span>
           {t('nav.diagnostics')}
         </button>
-        <div className="mt-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-surface-400">{t('nav.language')}</div>
-        <div className="mt-1 flex gap-1 px-3">
-          <button
-            type="button"
-            onClick={() => setLocale('zh')}
-            className={`flex-1 rounded-md px-2 py-1.5 text-[12px] font-medium ${locale === 'zh' ? 'bg-surface-200/50 text-surface-900 dark:bg-surface-800 dark:text-surface-50' : 'text-surface-500 hover:bg-surface-200/30 dark:hover:bg-surface-900'}`}
-          >
-            {t('nav.languageZh')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setLocale('en')}
-            className={`flex-1 rounded-md px-2 py-1.5 text-[12px] font-medium ${locale === 'en' ? 'bg-surface-200/50 text-surface-900 dark:bg-surface-800 dark:text-surface-50' : 'text-surface-500 hover:bg-surface-200/30 dark:hover:bg-surface-900'}`}
-          >
-            {t('nav.languageEn')}
-          </button>
-        </div>
       </nav>
 
-      <div className="border-t border-surface-200 p-4 dark:border-surface-800">
+      <div className="space-y-3 border-t border-surface-200 p-4 dark:border-surface-800">
+        <div className="px-1">
+          <div className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-widest text-surface-400">{t('nav.language')}</div>
+          <div className="flex rounded-md bg-surface-100 p-0.5 dark:bg-surface-900">
+            <button
+              type="button"
+              onClick={() => setLocale('zh')}
+              className={`flex-1 rounded-[5px] px-2 py-1.5 text-[12px] font-medium transition-colors ${locale === 'zh' ? 'bg-white text-surface-900 shadow-sm dark:bg-surface-800 dark:text-white' : 'text-surface-500 hover:text-surface-900 dark:hover:text-surface-200'}`}
+            >
+              {t('nav.languageZh')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocale('en')}
+              className={`flex-1 rounded-[5px] px-2 py-1.5 text-[12px] font-medium transition-colors ${locale === 'en' ? 'bg-white text-surface-900 shadow-sm dark:bg-surface-800 dark:text-white' : 'text-surface-500 hover:text-surface-900 dark:hover:text-surface-200'}`}
+            >
+              {t('nav.languageEn')}
+            </button>
+          </div>
+        </div>
         <div className="flex items-center px-2 text-[11px] font-medium text-surface-500">
           <span className={`mr-2 h-1.5 w-1.5 rounded-full ${piInstalled ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-amber-500'}`} />
           {piInstalled ? t('nav.piDetected') : t('nav.piMissing')}
@@ -295,7 +297,7 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
   const canCredential = canConfigureCredential(provider);
 
   return (
-    <article className="group flex min-h-[286px] flex-col overflow-hidden rounded-xl border border-surface-200 bg-white transition-all hover:border-surface-400 hover:shadow-vercel dark:border-surface-800 dark:bg-[#0a0a0a] dark:hover:border-surface-600 dark:hover:shadow-linear">
+    <article className="group flex flex-col overflow-hidden rounded-xl border border-surface-200 bg-white transition-colors hover:border-surface-300 hover:shadow-vercel dark:border-surface-800 dark:bg-surface-900 dark:hover:border-surface-700 dark:hover:shadow-linear">
       <div className="flex items-start justify-between p-5 pb-4">
         <div className="flex min-w-0 items-center space-x-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-surface-200 text-surface-500 dark:border-surface-700 dark:text-surface-400">
@@ -353,9 +355,9 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
         )}
       </div>
 
-      <div className="flex items-center justify-between border-t border-surface-100 bg-surface-50/30 px-3 py-3 dark:border-surface-800/50 dark:bg-[#0a0a0a]">
-        <span className="px-2.5 text-[11px] text-surface-500">{t('card.modelsHint')}</span>
-        <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between gap-2 border-t border-surface-100 bg-surface-50/60 px-3 py-2.5 dark:border-surface-800 dark:bg-surface-900">
+        <span className="min-w-0 flex-1 truncate px-2 text-[11px] text-surface-500" title={t('card.modelsHint')}>{t('card.modelsHint')}</span>
+        <div className="flex shrink-0 items-center gap-0.5">
           <button
             type="button"
             onClick={onTest}
@@ -469,7 +471,7 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">{t('providers.title')}</h1>
           <p className="mt-1 text-[14px] text-surface-500">{t('providers.subtitle')}</p>
@@ -478,7 +480,7 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
           <button
             type="button"
             onClick={onImport}
-            className="flex h-9 items-center rounded-md border border-surface-200 bg-white px-4 text-[13px] font-medium text-surface-700 shadow-sm transition-colors hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200 dark:hover:bg-surface-800"
+            className="flex h-9 items-center rounded-md border border-surface-200 bg-white px-4 text-[13px] font-medium text-surface-700 shadow-sm transition-colors hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-200 dark:hover:bg-surface-800"
           >
             <Download size={16} className="mr-2 opacity-70" />
             {t('providers.importPi')}
@@ -486,7 +488,7 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
           <button
             type="button"
             onClick={onNativeLogin}
-            className="flex h-9 items-center rounded-md border border-surface-200 bg-white px-4 text-[13px] font-medium text-surface-700 shadow-sm transition-colors hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200 dark:hover:bg-surface-800"
+            className="flex h-9 items-center rounded-md border border-surface-200 bg-white px-4 text-[13px] font-medium text-surface-700 shadow-sm transition-colors hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-200 dark:hover:bg-surface-800"
           >
             <KeyRound size={16} className="mr-2 opacity-70" />
             {t('providers.loginNative')}
@@ -529,7 +531,7 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t('providers.search')}
             aria-label={t('providers.search')}
-            className="w-full rounded-md border border-surface-200 bg-white py-1.5 pl-8 pr-3 text-[13px] text-surface-900 outline-none transition-colors placeholder:text-surface-400 focus:border-surface-400 focus:ring-1 focus:ring-surface-400 dark:border-surface-700 dark:bg-[#0a0a0a] dark:text-white"
+            className="w-full rounded-md border border-surface-200 bg-white py-1.5 pl-8 pr-3 text-[13px] text-surface-900 outline-none transition-colors placeholder:text-surface-400 focus:border-surface-400 focus:ring-1 focus:ring-surface-400 dark:border-surface-700 dark:bg-surface-950 dark:text-white"
           />
         </div>
       </div>
@@ -552,7 +554,7 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
           ))}
         </div>
       ) : isTrulyEmpty ? (
-        <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-surface-300 bg-white/60 px-6 text-center dark:border-surface-800 dark:bg-[#0a0a0a]/60">
+        <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-surface-300 bg-white/60 px-6 text-center dark:border-surface-800 dark:bg-surface-900/60">
           <Server size={22} className="mb-3 text-surface-400" />
           <h2 className="text-[14px] font-medium text-surface-900 dark:text-white">{t('providers.emptyTitle')}</h2>
           <p className="mt-1 text-[13px] text-surface-500">{t('providers.emptyBody')}</p>
@@ -561,11 +563,11 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
               <Download size={15} className="mr-2 opacity-70" />
               {t('providers.importPi')}
             </button>
-            <button type="button" onClick={onNativeLogin} className="flex h-9 items-center rounded-md border border-surface-200 bg-white px-4 text-[13px] font-medium text-surface-700 hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200">{t('providers.loginNative')}</button>
+            <button type="button" onClick={onNativeLogin} className="flex h-9 items-center rounded-md border border-surface-200 bg-white px-4 text-[13px] font-medium text-surface-700 hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-200">{t('providers.loginNative')}</button>
           </div>
         </div>
       ) : (
-        <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-surface-300 bg-white/60 text-center dark:border-surface-800 dark:bg-[#0a0a0a]/60">
+        <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-surface-300 bg-white/60 text-center dark:border-surface-800 dark:bg-surface-900/60">
           <Search size={22} className="mb-3 text-surface-400" />
           <h2 className="text-[14px] font-medium text-surface-900 dark:text-white">{t('providers.noMatchTitle')}</h2>
           <p className="mt-1 text-[13px] text-surface-500">{t('providers.noMatchBody')}</p>
@@ -687,8 +689,8 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm dark:bg-black/60" role="presentation">
-      <div className="w-full max-w-lg overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="provider-editor-title">
+    <div className="modal-backdrop" role="presentation">
+      <div className="modal-panel max-w-lg" role="dialog" aria-modal="true" aria-labelledby="provider-editor-title">
         <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
           <div>
             <h2 id="provider-editor-title" className="text-[16px] font-bold text-surface-900 dark:text-white">{editing ? t('editor.editTitle') : t('editor.createTitle')}</h2>
@@ -697,19 +699,19 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
           <button type="button" onClick={onClose} disabled={submitting} title={t('common.close')} aria-label={t('common.close')} className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
         </div>
 
-        <form onSubmit={submit}>
-          <div className="space-y-4 p-6">
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('editor.displayName')}</span>
-              <input required value={name} onChange={(event) => setName(event.target.value)} placeholder={t('editor.namePlaceholder')} autoFocus className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+              <input required value={name} onChange={(event) => setName(event.target.value)} placeholder={t('editor.namePlaceholder')} autoFocus className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
             </label>
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Provider ID <span className="font-normal text-surface-400">{t('common.optional')}</span></span>
-              <input value={id} onChange={(event) => setId(event.target.value)} placeholder={t('editor.idPlaceholder')} pattern="[A-Za-z0-9_-]+" title={t('editor.idPattern')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+              <input value={id} onChange={(event) => setId(event.target.value)} placeholder={t('editor.idPlaceholder')} pattern="[A-Za-z0-9_-]+" title={t('editor.idPattern')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
             </label>
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Base URL</span>
-              <input required type="url" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+              <input required type="url" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
             </label>
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
@@ -724,7 +726,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
               </div>
               {discoveredModels.length > 0 && <div className="space-y-2 rounded-md border border-surface-200 p-2 dark:border-surface-700">
                 <div className="flex items-center gap-2">
-                  <input value={discoveryQuery} onChange={(event) => setDiscoveryQuery(event.target.value)} placeholder={t('editor.searchUpstream')} className="min-w-0 flex-1 rounded border border-surface-200 bg-surface-50 px-2 py-1.5 text-[12px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+                  <input value={discoveryQuery} onChange={(event) => setDiscoveryQuery(event.target.value)} placeholder={t('editor.searchUpstream')} className="min-w-0 flex-1 rounded border border-surface-200 bg-surface-50 px-2 py-1.5 text-[12px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
                   <button type="button" onClick={() => setSelectedModelIds(visibleDiscoveredModels.map((model) => model.id))} className="shrink-0 text-[11px] text-primary-600 hover:underline dark:text-primary-400">{t('common.selectAll')}</button>
                   <button type="button" onClick={() => setSelectedModelIds([])} className="shrink-0 text-[11px] text-surface-500 hover:underline">{t('common.clear')}</button>
                 </div>
@@ -732,22 +734,22 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
                 {visibleDiscoveredModels.map((model) => (
                   <div key={model.id} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-surface-50 dark:hover:bg-surface-800/60">
                     <input type="checkbox" checked={selectedModelIds.includes(model.id)} onChange={(event) => setSelectedModelIds((current) => event.target.checked ? [...current, model.id] : current.filter((id) => id !== model.id))} aria-label={t('editor.selectModel', { id: model.id })} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
-                    <input value={model.id} onChange={(event) => updateDiscoveredModel(model.id, { id: event.target.value })} aria-label={t('editor.modelIdAria', { id: model.id })} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 font-mono text-[12px] text-surface-900 outline-none focus:border-surface-300 focus:bg-white dark:text-white dark:focus:border-surface-600 dark:focus:bg-surface-900" />
-                    <input value={model.name} onChange={(event) => updateDiscoveredModel(model.id, { name: event.target.value })} aria-label={t('editor.modelNameAria', { id: model.id })} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 text-[12px] text-surface-700 outline-none focus:border-surface-300 focus:bg-white dark:text-surface-200 dark:focus:border-surface-600 dark:focus:bg-surface-900" />
+                    <input value={model.id} onChange={(event) => updateDiscoveredModel(model.id, { id: event.target.value })} aria-label={t('editor.modelIdAria', { id: model.id })} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 font-mono text-[12px] text-surface-900 outline-none focus:border-surface-300 focus:bg-white dark:text-white dark:focus:border-surface-600 dark:focus:bg-surface-950" />
+                    <input value={model.name} onChange={(event) => updateDiscoveredModel(model.id, { name: event.target.value })} aria-label={t('editor.modelNameAria', { id: model.id })} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 text-[12px] text-surface-700 outline-none focus:border-surface-300 focus:bg-white dark:text-surface-200 dark:focus:border-surface-600 dark:focus:bg-surface-950" />
                     <label className="flex shrink-0 items-center gap-1 text-[10px] text-surface-400" title={t('editor.thinkingHint')}><input type="checkbox" checked={model.reasoning} onChange={(event) => updateDiscoveredModel(model.id, { reasoning: event.target.checked })} aria-label={t('editor.thinkingAria', { id: model.id })} />{t('common.thinking')}</label>
                   </div>
                 ))}
                 {visibleDiscoveredModels.length === 0 && <p className="px-2 py-3 text-[11px] text-surface-500">{t('editor.noUpstreamMatch')}</p>}
                 </div>
               </div>}
-              <input value={models} onChange={(event) => { setModels(event.target.value); setSelectedModelIds([]); }} placeholder={t('editor.manualPlaceholder')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+              <input value={models} onChange={(event) => { setModels(event.target.value); setSelectedModelIds([]); }} placeholder={t('editor.manualPlaceholder')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
               {discoveryError && <p className="text-[11px] leading-4 text-amber-600 dark:text-amber-400">{discoveryError}</p>}
             </div>
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">API Key <span className="font-normal text-surface-400">{t('common.optional')}</span></span>
               <div className="relative">
                 <KeyRound size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
-                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" autoComplete="new-password" placeholder={editing ? (provider?.credentialConfigured ? t('editor.keepKey') : t('editor.laterKey')) : t('editor.laterKey')} className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" autoComplete="new-password" placeholder={editing ? (provider?.credentialConfigured ? t('editor.keepKey') : t('editor.laterKey')) : t('editor.laterKey')} className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
               </div>
               <p className="text-[11px] text-surface-500">{t('editor.keyHint')}</p>
             </label>
@@ -823,8 +825,8 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm dark:bg-black/60" role="presentation">
-      <div className="w-full max-w-xl overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="import-pi-title">
+    <div className="modal-backdrop" role="presentation">
+      <div className="modal-panel max-w-xl" role="dialog" aria-modal="true" aria-labelledby="import-pi-title">
         <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
           <div>
             <h2 id="import-pi-title" className="text-[16px] font-bold text-surface-900 dark:text-white">{t('import.title')}</h2>
@@ -832,7 +834,7 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
           </div>
           <button type="button" onClick={onClose} disabled={submitting} title={t('common.close')} aria-label={t('common.close')} className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
         </div>
-        <div className="max-h-[420px] space-y-4 overflow-y-auto p-6">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
           {loading && <div className="flex items-center text-[13px] text-surface-500"><Loader2 size={14} className="mr-2 animate-spin" />{t('import.reading')}</div>}
           {preview && (
             <>
@@ -1014,8 +1016,8 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm dark:bg-black/60" role="presentation">
-      <div className="w-full max-w-md overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="native-login-title">
+    <div className="modal-backdrop" role="presentation">
+      <div className="modal-panel max-w-md" role="dialog" aria-modal="true" aria-labelledby="native-login-title">
         <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
           <div>
             <h2 id="native-login-title" className="text-[16px] font-bold text-surface-900 dark:text-white">{t('login.title')}</h2>
@@ -1023,12 +1025,12 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
           </div>
           <button type="button" onClick={onClose} disabled={submitting} title={t('common.close')} aria-label={t('common.close')} className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
         </div>
-        <div className="space-y-4 p-6">
-          <div className="rounded-md bg-surface-50 px-3 py-2 text-[12px] text-surface-500 dark:bg-surface-900/50">{t('login.authHint')}</div>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
+          <div className="rounded-md bg-surface-50 px-3 py-2 text-[12px] text-surface-500 dark:bg-surface-950/60">{t('login.authHint')}</div>
           {!login && !provider && (
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('login.channel')}</span>
-              <select value={selectedProvider?.id || ''} onChange={(event) => { setSelectedProvider(featured.find((item) => item.id === event.target.value) || null); setAuthType('oauth'); setError(''); }} disabled={featuredLoading} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+              <select value={selectedProvider?.id || ''} onChange={(event) => { setSelectedProvider(featured.find((item) => item.id === event.target.value) || null); setAuthType('oauth'); setError(''); }} disabled={featuredLoading} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white">
                 <option value="">{featuredLoading ? t('login.reading') : t('login.pleaseSelect')}</option>
                 {featured.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.id}</option>)}
               </select>
@@ -1037,7 +1039,7 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
           {!login && activeProvider && methods.length > 1 && (
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('login.method')}</span>
-              <select value={authType} onChange={(event) => setAuthType(event.target.value as 'oauth' | 'api_key')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+              <select value={authType} onChange={(event) => setAuthType(event.target.value as 'oauth' | 'api_key')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white">
                 {methods.includes('oauth') && <option value="oauth">{t('login.oauth')}</option>}
                 {methods.includes('api_key') && <option value="api_key">{t('login.apiKeyMethod')}</option>}
               </select>
@@ -1047,7 +1049,7 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
             <form onSubmit={(event) => void startLogin(event)} className="space-y-4">
               <label className="block space-y-1.5">
                 <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">API Key</span>
-                <input value={apiKey} onChange={(event) => { setApiKey(event.target.value); setError(''); }} type="password" autoComplete="new-password" autoFocus placeholder={t('login.noEcho')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+                <input value={apiKey} onChange={(event) => { setApiKey(event.target.value); setError(''); }} type="password" autoComplete="new-password" autoFocus placeholder={t('login.noEcho')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
               </label>
               <button type="submit" disabled={submitting} className="flex h-9 w-full items-center justify-center rounded-md bg-surface-950 text-[13px] font-medium text-white hover:bg-surface-800 disabled:opacity-60 dark:bg-white dark:text-surface-950">
                 {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
@@ -1072,12 +1074,12 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
               <label className="block space-y-1.5">
                 <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{login.prompt.message}</span>
                 {login.prompt.options && login.prompt.options.length > 0 ? (
-                  <select value={promptValue} onChange={(event) => setPromptValue(event.target.value)} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+                  <select value={promptValue} onChange={(event) => setPromptValue(event.target.value)} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white">
                     <option value="">{t('login.pleaseSelect')}</option>
                     {login.prompt.options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                   </select>
                 ) : (
-                  <input value={promptValue} onChange={(event) => setPromptValue(event.target.value)} placeholder={login.prompt.placeholder || ''} autoFocus className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+                  <input value={promptValue} onChange={(event) => setPromptValue(event.target.value)} placeholder={login.prompt.placeholder || ''} autoFocus className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
                 )}
               </label>
               <button type="submit" disabled={submitting} className="flex h-9 w-full items-center justify-center rounded-md bg-surface-950 text-[13px] font-medium text-white hover:bg-surface-800 disabled:opacity-60 dark:bg-white dark:text-surface-950">
@@ -1141,8 +1143,8 @@ function CredentialModal({ provider, isOpen, onClose, onSaved }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm dark:bg-black/60" role="presentation">
-      <div className="w-full max-w-md overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="credential-title">
+    <div className="modal-backdrop" role="presentation">
+      <div className="modal-panel max-w-md" role="dialog" aria-modal="true" aria-labelledby="credential-title">
         <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
           <div>
             <h2 id="credential-title" className="text-[16px] font-bold text-surface-900 dark:text-white">{t('cred.title')}</h2>
@@ -1150,8 +1152,8 @@ function CredentialModal({ provider, isOpen, onClose, onSaved }: {
           </div>
           <button type="button" onClick={onClose} disabled={submitting} title={t('common.close')} aria-label={t('common.close')} className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
         </div>
-        <form onSubmit={save}>
-          <div className="space-y-4 p-6">
+        <form onSubmit={save} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
             <div className="rounded-md bg-surface-50 px-3 py-2 text-[12px] text-surface-500 dark:bg-surface-900/50">
               {provider.credentialConfigured ? t('cred.hasKey') : t('cred.noKey')}
               {provider.id === 'antigravity' ? t('cred.antigravity') : ''}
@@ -1160,7 +1162,7 @@ function CredentialModal({ provider, isOpen, onClose, onSaved }: {
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">API Key</span>
               <div className="relative">
                 <KeyRound size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
-                <input value={apiKey} onChange={(event) => { setApiKey(event.target.value); setError(''); }} type="password" autoComplete="new-password" autoFocus placeholder={t('cred.noEcho')} className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+                <input value={apiKey} onChange={(event) => { setApiKey(event.target.value); setError(''); }} type="password" autoComplete="new-password" autoFocus placeholder={t('cred.noEcho')} className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
               </div>
             </label>
             {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
@@ -1217,8 +1219,8 @@ function AddCatalogModelModal({ providers, onClose, onSaved }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm dark:bg-black/60" role="presentation">
-      <div className="w-full max-w-md overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="add-model-title">
+    <div className="modal-backdrop" role="presentation">
+      <div className="modal-panel max-w-md" role="dialog" aria-modal="true" aria-labelledby="add-model-title">
         <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
           <div>
             <h2 id="add-model-title" className="text-[16px] font-bold text-surface-900 dark:text-white">{t('addModel.title')}</h2>
@@ -1226,21 +1228,21 @@ function AddCatalogModelModal({ providers, onClose, onSaved }: {
           </div>
           <button type="button" onClick={onClose} disabled={submitting} title={t('common.close')} aria-label={t('common.close')} className="text-surface-400 hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
         </div>
-        <form onSubmit={submit}>
-          <div className="space-y-4 p-6">
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('addModel.channel')}</span>
-              <select value={providerId} onChange={(event) => setProviderId(event.target.value)} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+              <select value={providerId} onChange={(event) => setProviderId(event.target.value)} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white">
                 {providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.name} · {provider.id}</option>)}
               </select>
             </label>
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('addModel.modelId')}</span>
-              <input required value={modelId} onChange={(event) => setModelId(event.target.value)} placeholder={t('addModel.idPlaceholder')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+              <input required value={modelId} onChange={(event) => setModelId(event.target.value)} placeholder={t('addModel.idPlaceholder')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
             </label>
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('addModel.displayName')} <span className="font-normal text-surface-400">{t('common.optional')}</span></span>
-              <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('addModel.namePlaceholder')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+              <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('addModel.namePlaceholder')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
             </label>
             <label className="flex items-center gap-2 text-[12px] text-surface-600 dark:text-surface-300">
               <input type="checkbox" checked={reasoning} onChange={(event) => setReasoning(event.target.checked)} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
@@ -1358,15 +1360,15 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
       </div>
 
       {activeTab === 'catalog' && (
-        <div className="overflow-hidden rounded-xl border border-surface-200 bg-white shadow-sm dark:border-surface-800 dark:bg-[#0a0a0a]">
+        <div className="overflow-hidden rounded-xl border border-surface-200 bg-white shadow-sm dark:border-surface-800 dark:bg-surface-900">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-100 bg-surface-50/50 p-3 dark:border-surface-800 dark:bg-surface-900/20">
             <div className="relative w-64 max-w-full">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
-              <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('models.searchId')} aria-label={t('models.searchId')} className="w-full rounded-md border border-surface-200 bg-white py-1.5 pl-8 pr-3 text-[13px] outline-none focus:border-surface-400 dark:border-surface-700 dark:bg-[#0a0a0a] dark:text-white" />
+              <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('models.searchId')} aria-label={t('models.searchId')} className="w-full rounded-md border border-surface-200 bg-white py-1.5 pl-8 pr-3 text-[13px] outline-none focus:border-surface-400 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[12px] text-surface-500">{t('models.catalogHint')}</span>
-              <button type="button" onClick={() => setShowAddModel(true)} disabled={customProviders.length === 0} className="inline-flex h-8 items-center rounded-md border border-surface-200 bg-white px-3 text-[12px] font-medium text-surface-700 hover:bg-surface-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200">
+              <span className="hidden max-w-md truncate text-[12px] text-surface-500 xl:inline" title={t('models.catalogHint')}>{t('models.catalogHint')}</span>
+              <button type="button" onClick={() => setShowAddModel(true)} disabled={customProviders.length === 0} className="inline-flex h-8 items-center rounded-md border border-surface-200 bg-white px-3 text-[12px] font-medium text-surface-700 hover:bg-surface-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-200">
                 <Plus size={13} className="mr-1.5" />{t('models.add')}
               </button>
             </div>
@@ -1375,25 +1377,25 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
             <table className="w-full min-w-[980px] text-left text-[13px]">
               <thead className="bg-surface-50/80 text-[12px] font-medium text-surface-500 dark:bg-surface-900/50 dark:text-surface-400">
                 <tr>
-                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">{t('models.colModel')}</th>
-                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">Provider</th>
-                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">{t('models.colInput')}</th>
-                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">Thinking</th>
-                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">Context</th>
-                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">{t('models.colStatus')}</th>
-                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">{t('models.colPolicy')}</th>
+                  <th className="whitespace-nowrap border-b border-surface-100 px-4 py-3 dark:border-surface-800">{t('models.colModel')}</th>
+                  <th className="whitespace-nowrap border-b border-surface-100 px-4 py-3 dark:border-surface-800">Provider</th>
+                  <th className="whitespace-nowrap border-b border-surface-100 px-4 py-3 dark:border-surface-800">{t('models.colInput')}</th>
+                  <th className="whitespace-nowrap border-b border-surface-100 px-4 py-3 dark:border-surface-800">Thinking</th>
+                  <th className="whitespace-nowrap border-b border-surface-100 px-4 py-3 dark:border-surface-800">Context</th>
+                  <th className="whitespace-nowrap border-b border-surface-100 px-4 py-3 dark:border-surface-800">{t('models.colStatus')}</th>
+                  <th className="whitespace-nowrap border-b border-surface-100 px-4 py-3 dark:border-surface-800">{t('models.colPolicy')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-100 text-surface-700 dark:divide-surface-800/50 dark:text-surface-300">
                 {visibleModels.map(({ provider, model }) => (
                   <tr key={`${provider.id}/${model.id}`} className="hover:bg-surface-50 dark:hover:bg-surface-900/30">
                     <td className="px-4 py-3"><div className="font-medium text-surface-900 dark:text-white">{model.name}</div><div className="font-mono text-[11px] text-surface-400">{provider.id}/{model.id}</div></td>
-                    <td className="px-4 py-3">{provider.name}</td>
+                    <td className="max-w-[180px] truncate px-4 py-3" title={provider.name}>{provider.name}</td>
                     <td className="px-4 py-3 text-[12px] text-surface-500">{model.input.join(', ')}</td>
                     <td className="px-4 py-3 text-[12px] text-surface-500">{thinkingSummary(model, t)}</td>
                     <td className="px-4 py-3"><ModelContextWindowEditor key={`${provider.id}/${model.id}:${model.contextWindow}`} provider={provider} model={model} onStateChanged={onStateChanged} /></td>
-                    <td className="px-4 py-3">{provider.id === state.active.providerId && model.id === state.active.modelId ? <span className="text-primary-600 dark:text-primary-400">{t('models.default')}</span> : provider.status === 'ready' ? <span className="text-surface-400">{t('common.available')}</span> : <span className="text-amber-600 dark:text-amber-400">{statusMeta(provider.status, t).label}</span>}</td>
-                    <td className="px-4 py-3">
+                    <td className="whitespace-nowrap px-4 py-3">{provider.id === state.active.providerId && model.id === state.active.modelId ? <span className="text-primary-600 dark:text-primary-400">{t('models.default')}</span> : provider.status === 'ready' ? <span className="text-surface-400">{t('common.available')}</span> : <span className="text-amber-600 dark:text-amber-400">{statusMeta(provider.status, t).label}</span>}</td>
+                    <td className="whitespace-nowrap px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button type="button" onClick={() => { setMappingRef(`${provider.id}/${model.id}`); setActiveTab('thinking'); }} title={t('models.editThinking', { name: model.name })} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium text-surface-600 transition-colors hover:bg-surface-100 hover:text-surface-950 dark:text-surface-400 dark:hover:bg-surface-800 dark:hover:text-white"><Pencil size={13} />{t('models.map')}</button>
                         {isCustomApiProvider(provider) && (
@@ -1439,7 +1441,7 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
       )}
 
       {activeTab === 'default' && (
-        <div className="max-w-3xl rounded-xl border border-surface-200 bg-white p-6 dark:border-surface-800 dark:bg-[#0a0a0a]">
+        <div className="max-w-3xl rounded-xl border border-surface-200 bg-white p-6 dark:border-surface-800 dark:bg-surface-900">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-100 text-surface-500 dark:bg-surface-800"><CheckCircle2 size={17} /></div>
             <div><h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">{t('models.defaultTitle')}</h2><p className="text-[12px] text-surface-500">{t('models.defaultHint')}</p></div>
@@ -1447,7 +1449,7 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
           <div className="grid gap-4 md:grid-cols-3">
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Provider</span>
-              <select value={selectedProviderId} onChange={(event) => handleProviderChange(event.target.value)} disabled={providerOptions.length === 0} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+              <select value={selectedProviderId} onChange={(event) => handleProviderChange(event.target.value)} disabled={providerOptions.length === 0} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-950 dark:text-white">
                 {providerOptions.length === 0 && <option value="">{t('models.noSources')}</option>}
                 {providerOptions.map((provider) => (
                   <option key={provider.id} value={provider.id}>{provider.name}{provider.status === 'ready' ? '' : ` · ${statusMeta(provider.status, t).label}`}</option>
@@ -1456,14 +1458,14 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
             </label>
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Model</span>
-              <select value={selectedModelId} onChange={(event) => handleModelChange(event.target.value)} disabled={!selectedProvider || selectedProvider.models.length === 0} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+              <select value={selectedModelId} onChange={(event) => handleModelChange(event.target.value)} disabled={!selectedProvider || selectedProvider.models.length === 0} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-950 dark:text-white">
                 {!selectedProvider && <option value="">{t('models.pickProviderFirst')}</option>}
                 {selectedProvider?.models.map((model) => <option key={model.id} value={model.id}>{model.id}</option>)}
               </select>
             </label>
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Thinking</span>
-              <select value={selectedThinking} onChange={(event) => { setSelectedThinking(event.target.value as ThinkingLevel); setRouteError(''); }} disabled={!selectedModel} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+              <select value={selectedThinking} onChange={(event) => { setSelectedThinking(event.target.value as ThinkingLevel); setRouteError(''); }} disabled={!selectedModel} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-950 dark:text-white">
                 {thinkingLevels.map((level) => <option key={level} value={level}>{level}</option>)}
               </select>
             </label>
@@ -1491,11 +1493,11 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
 
       {activeTab === 'thinking' && (
         <div className="max-w-4xl space-y-4">
-          <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
+          <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-surface-900">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <label className="block min-w-[280px] flex-1 space-y-1.5">
                 <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('models.pickModel')}</span>
-                <select value={effectiveMappingRef} onChange={(event) => { setMappingRef(event.target.value); }} disabled={!mappingModel} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[12px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
+                <select value={effectiveMappingRef} onChange={(event) => { setMappingRef(event.target.value); }} disabled={!mappingModel} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[12px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-950 dark:text-white">
                   {models.map(({ provider, model }) => <option key={`${provider.id}/${model.id}`} value={`${provider.id}/${model.id}`}>{provider.id}/{model.id}</option>)}
                 </select>
               </label>
@@ -1559,7 +1561,7 @@ function ModelContextWindowEditor({
           value={draft}
           onChange={(event) => { setDraft(event.target.value); setError(''); }}
           aria-label={t('context.aria', { name: model.name })}
-          className="w-[118px] rounded-md border border-surface-200 bg-white px-2 py-1.5 font-mono text-[12px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white"
+          className="w-[118px] rounded-md border border-surface-200 bg-white px-2 py-1.5 font-mono text-[12px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white"
         />
         <span className="text-[11px] text-surface-400">tokens</span>
         {changed && <button type="button" onClick={() => void save()} disabled={saving} title={t('context.save')} aria-label={t('context.save')} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-primary-600 hover:bg-primary-50 disabled:cursor-wait disabled:opacity-50 dark:text-primary-400 dark:hover:bg-primary-500/10"><Save size={13} /></button>}
@@ -1633,7 +1635,7 @@ function ThinkingMappingEditor({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
+    <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-surface-900">
       <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">{t('thinking.title')}</h2><p className="mt-1 text-[12px] text-surface-500">{t('thinking.hint')}</p></div>
@@ -1653,8 +1655,8 @@ function ThinkingMappingEditor({
               return (
                 <tr key={level}>
                   <td className="px-5 py-3 font-mono text-[12px] font-medium text-surface-900 dark:text-white">{level}</td>
-                  <td className="px-5 py-3"><select value={mode} onChange={(event) => changeMappingMode(level, event.target.value as 'default' | 'value' | 'unsupported')} disabled={isDisabled} aria-label={t('thinking.modeAria', { level })} className="rounded-md border border-surface-200 bg-surface-50 px-2.5 py-1.5 text-[12px] text-surface-800 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200"><option value="default">{t('thinking.modeDefault')}</option><option value="value">{t('thinking.specifyValue')}</option><option value="unsupported">{t('thinking.modeUnsupported')}</option></select></td>
-                  <td className="px-5 py-3">{mode === 'value' ? <input value={typeof mappedValue === 'string' ? mappedValue : ''} onChange={(event) => changeMappingValue(level, event.target.value)} aria-label={t('thinking.valueAria', { level })} placeholder={level === 'off' ? 'none' : level} className="w-48 max-w-full rounded-md border border-surface-200 bg-white px-2.5 py-1.5 font-mono text-[12px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" /> : <span className={`text-[12px] ${mode === 'unsupported' ? 'text-surface-400' : 'text-surface-500'}`}>{mode === 'unsupported' ? t('thinking.modeUnsupported') : level === 'xhigh' || level === 'max' ? t('thinking.disabledDefault') : t('thinking.modeDefault')}</span>}</td>
+                  <td className="px-5 py-3"><select value={mode} onChange={(event) => changeMappingMode(level, event.target.value as 'default' | 'value' | 'unsupported')} disabled={isDisabled} aria-label={t('thinking.modeAria', { level })} className="rounded-md border border-surface-200 bg-surface-50 px-2.5 py-1.5 text-[12px] text-surface-800 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-200"><option value="default">{t('thinking.modeDefault')}</option><option value="value">{t('thinking.specifyValue')}</option><option value="unsupported">{t('thinking.modeUnsupported')}</option></select></td>
+                  <td className="px-5 py-3">{mode === 'value' ? <input value={typeof mappedValue === 'string' ? mappedValue : ''} onChange={(event) => changeMappingValue(level, event.target.value)} aria-label={t('thinking.valueAria', { level })} placeholder={level === 'off' ? 'none' : level} className="w-48 max-w-full rounded-md border border-surface-200 bg-white px-2.5 py-1.5 font-mono text-[12px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" /> : <span className={`text-[12px] ${mode === 'unsupported' ? 'text-surface-400' : 'text-surface-500'}`}>{mode === 'unsupported' ? t('thinking.modeUnsupported') : level === 'xhigh' || level === 'max' ? t('thinking.disabledDefault') : t('thinking.modeDefault')}</span>}</td>
                   <td className="px-5 py-3 text-[12px]">{mode === 'value' ? <span className="text-emerald-600 dark:text-emerald-400">{t('thinking.send', { value: mappedValue || t('thinking.pendingValue') })}</span> : mode === 'unsupported' ? <span className="text-surface-400">{t('thinking.hidden')}</span> : <span className="text-surface-500">{t('thinking.useDefault')}</span>}</td>
                 </tr>
               );
@@ -1664,7 +1666,7 @@ function ThinkingMappingEditor({
       </div>
       <div className="flex flex-wrap items-end justify-between gap-4 border-t border-surface-100 bg-surface-50/50 px-5 py-4 dark:border-surface-800 dark:bg-surface-900/20">
         <div className="flex flex-wrap items-end gap-4">
-          <label className="block space-y-1.5"><span className="text-[11px] font-semibold text-surface-600 dark:text-surface-300">{t('thinking.source')}</span><select value={mappingSource} onChange={(event) => setMappingSource(event.target.value as ThinkingMapSource)} className="block rounded-md border border-surface-200 bg-white px-2.5 py-1.5 text-[12px] text-surface-800 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200">{(['provider-default', 'provider-docs', 'request-probe', 'user'] as ThinkingMapSource[]).map((value) => <option key={value} value={value}>{thinkingSourceLabel(value, t)}</option>)}</select></label>
+          <label className="block space-y-1.5"><span className="text-[11px] font-semibold text-surface-600 dark:text-surface-300">{t('thinking.source')}</span><select value={mappingSource} onChange={(event) => setMappingSource(event.target.value as ThinkingMapSource)} className="block rounded-md border border-surface-200 bg-white px-2.5 py-1.5 text-[12px] text-surface-800 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-200">{(['provider-default', 'provider-docs', 'request-probe', 'user'] as ThinkingMapSource[]).map((value) => <option key={value} value={value}>{thinkingSourceLabel(value, t)}</option>)}</select></label>
           <label className="flex items-center gap-2 pb-1.5 text-[12px] text-surface-600 dark:text-surface-300"><input type="checkbox" checked={mappingVerified} onChange={(event) => setMappingVerified(event.target.checked)} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />{t('thinking.verifiedCheckbox')}</label>
         </div>
         <button type="button" onClick={() => void saveThinkingMap()} disabled={!mappingChanged || savingMapping} className="inline-flex h-8 shrink-0 items-center rounded-md bg-primary-600 px-3 text-[12px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">{savingMapping ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Save size={13} className="mr-1.5" />}{t('common.saveCandidate')}</button>
@@ -1742,7 +1744,7 @@ function CycleListEditor({
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)]">
-      <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
+      <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-surface-900">
         <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1793,7 +1795,7 @@ function CycleListEditor({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
+      <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-surface-900">
         <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
           <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">{t('cycle.availableTitle')}</h2>
           <p className="mt-1 text-[12px] text-surface-500">{t('cycle.availableHint')}</p>
@@ -1801,7 +1803,7 @@ function CycleListEditor({
         <div className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">
           <div className="relative">
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('cycle.search')} className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('cycle.search')} className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
           </div>
         </div>
         <div className="max-h-[520px] divide-y divide-surface-100 overflow-y-auto dark:divide-surface-800/50">
@@ -1886,7 +1888,7 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
         <p className="mt-1 text-[14px] text-surface-500">{t('live.subtitle')}</p>
       </div>
 
-      <div className="max-w-3xl overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
+      <div className="max-w-3xl overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-surface-900">
         <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
           <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">{t('live.candidate')}</h2>
           <p className="mt-1 text-[12px] text-surface-500">{t('live.candidateHint')}</p>
@@ -1928,7 +1930,7 @@ function DiagnosticsPage({ state }: { state: ManagerState }) {
         <p className="mt-1 text-[14px] text-surface-500">{t('diag.subtitle')}</p>
       </div>
       <div className="grid max-w-5xl gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
+        <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-surface-900">
           <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Activity size={15} /> {t('diag.piEnv')}</div>
           <dl className="space-y-2 text-[12px]">
             <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.install')}</dt><dd>{state.pi.installed ? t('diag.installed') : t('diag.notFound')}</dd></div>
@@ -1937,7 +1939,7 @@ function DiagnosticsPage({ state }: { state: ManagerState }) {
             <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.subscription')}</dt><dd>{state.pi.subscriptionReady ? t('status.ready') : t('diag.notReady')}</dd></div>
           </dl>
         </div>
-        <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
+        <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-surface-900">
           <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Server size={15} /> Gateway</div>
           <dl className="space-y-2 text-[12px]">
             <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.status')}</dt><dd>{state.gateway.running ? t('diag.running') : t('diag.stopped')}</dd></div>
@@ -1948,7 +1950,7 @@ function DiagnosticsPage({ state }: { state: ManagerState }) {
         </div>
       </div>
       <div className="grid max-w-5xl gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
+        <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-surface-900">
           <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><CheckCircle2 size={15} /> {t('diag.config')}</div>
           <dl className="space-y-2 text-[12px]">
             <div className="flex justify-between gap-4"><dt className="text-surface-500">revision</dt><dd className="font-mono">{state.configuration.revision}</dd></div>
@@ -1957,7 +1959,7 @@ function DiagnosticsPage({ state }: { state: ManagerState }) {
             <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.backup')}</dt><dd className="max-w-[220px] truncate font-mono" title={state.runtime.lastLiveBackupDir}>{state.runtime.lastLiveBackupDir || t('diag.none')}</dd></div>
           </dl>
         </div>
-        <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
+        <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-surface-900">
           <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Activity size={15} /> {t('diag.events')}</div>
           <div className="space-y-3">
             {(state.events.length > 0 ? state.events.slice(0, 6) : []).map((event) => (

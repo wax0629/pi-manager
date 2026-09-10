@@ -13,14 +13,16 @@
             ? saved
             : String(navigator.language || '').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
           document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en';
+          var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.classList.toggle('dark', dark);
         } catch (error) {}
       })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="/assets/index-CtR4UAiG.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CeY8YAN4.css">
+    <script type="module" crossorigin src="/assets/index-BFfa1pbc.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-rnKFOIEj.css">
   </head>
   <body>
     <div id="root"></div>

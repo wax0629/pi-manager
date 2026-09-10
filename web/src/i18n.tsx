@@ -31,6 +31,14 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, locale);
   }, [locale]);
 
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const sync = () => document.documentElement.classList.toggle('dark', media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+
   const value = useMemo<I18nValue>(() => ({
     locale,
     setLocale: setLocaleState,
