@@ -4,7 +4,7 @@
   "description": "Local control plane for Pi: providers, models, and live import into ~/.pi/agent.",
   "type": "module",
   "bin": {
-    "pi-manager": "./src/cli.mjs"
+    "pi-manager": "src/cli.mjs"
   },
   "files": [
     "src",
