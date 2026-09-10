@@ -1,7 +1,6 @@
 {
-  "name": "pi-manager",
+  "name": "@wax0629/pi-manager",
   "version": "0.1.0",
-  "private": true,
   "description": "Local control plane for Pi: providers, models, and live import into ~/.pi/agent.",
   "type": "module",
   "bin": {
@@ -9,8 +8,12 @@
   },
   "files": [
     "src",
-    "web/dist",
-    "README.md"
+    "web/dist/index.html",
+    "web/dist/assets",
+    "web/dist/favicon.svg",
+    "web/dist/icons.svg",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "start": "node src/server.mjs",
@@ -18,10 +21,31 @@
     "dev": "node --watch src/server.mjs",
     "dev:web": "npm --prefix web run dev",
     "build:web": "npm --prefix web run build",
+    "prepublishOnly": "npm --prefix web install && npm --prefix web run build",
     "test": "node --test",
     "check": "node --check src/server.mjs && node --check src/store.mjs && node --check src/profile.mjs && node --check src/gateway.mjs && node --check src/pi-auth.mjs && node --check src/pi-import.mjs && node --check src/provider-discovery.mjs && node --check src/pi-apply.mjs && node --check src/pi-native.mjs && node --check src/cli.mjs"
   },
   "engines": {
     "node": ">=20"
+  },
+  "license": "MIT",
+  "author": "wax0629",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wax0629/pi-manager.git"
+  },
+  "homepage": "https://github.com/wax0629/pi-manager",
+  "bugs": {
+    "url": "https://github.com/wax0629/pi-manager/issues"
+  },
+  "keywords": [
+    "pi",
+    "coding-agent",
+    "openai-compatible",
+    "local-first",
+    "model-management"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

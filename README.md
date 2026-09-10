@@ -24,21 +24,27 @@ Pi 的本地控制面。不 fork Pi，不改项目 `.pi`。在页面里管供应
 
 ## 运行
 
-先构建页面，再一条命令起服务并打开浏览器：
-
 ```bash
-npm --prefix web run build
-npx pi-manager
+npx @wax0629/pi-manager
 ```
 
-开发时仍可拆开跑：
+或全局安装：
+
+```bash
+npm i -g @wax0629/pi-manager
+pi-manager
+```
+
+会起 `http://127.0.0.1:8670` 并打开浏览器。`pi-manager --help` 看 `--port` / `--host` / `--no-open`。端口已被占用时，会打开已有实例，不报崩。
+
+从源码跑（开发）：
 
 ```bash
 npm start          # API  http://127.0.0.1:8670
 npm run dev:web    # UI   http://localhost:5173/
 ```
 
-`pi-manager --help` 看 `--port` / `--host` / `--no-open`。端口已被占用时，会打开已有实例，不报崩。
+从源码走 CLI 时先 `npm --prefix web run build`，再 `npx pi-manager`。
 
 ## 日常用法
 
@@ -67,6 +73,8 @@ npm --prefix web run lint
 npm --prefix web run build
 ```
 
+`web/dist` 会打进 npm 包，所以跟踪在 git 里。发版前再 build 一次。
+
 设计草案仍在 `docs/`，以本 README 和当前 UI 为准。隔离 Profile 的 apply / launch / stop 后端还在，页面已拿掉，不是日常路径。
 
 ## 社区
@@ -78,8 +86,8 @@ npm --prefix web run build
 - Discord：https://discord.com/invite/3cU7Bz4UPx
 - GitHub Discussions（分享工具）：https://github.com/earendil-works/pi/discussions
 
-npm 尚未发布。`pi-manager` 这个包名 2022 年下架过，正式上架可能要用 `@wax0629/pi-manager`。
+npm 包：[`@wax0629/pi-manager`](https://www.npmjs.com/package/@wax0629/pi-manager)。未 scoped 的 `pi-manager` 于 2022 年下架，没有抢回。
 
 ## License
 
-尚未选定。
+MIT

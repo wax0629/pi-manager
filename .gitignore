@@ -1,6 +1,6 @@
 data/*
 !data/.gitkeep
 *.log
+*.tgz
 .DS_Store
 node_modules/
-web/dist/
