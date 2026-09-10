@@ -13,6 +13,8 @@
             ? saved
             : String(navigator.language || '').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
           document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en';
+          var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          document.documentElement.classList.toggle('dark', dark);
         } catch (error) {}
       })();
     </script>
