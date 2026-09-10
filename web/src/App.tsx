@@ -16,7 +16,6 @@ import {
   Save,
   Search,
   Server,
-  Settings2,
   SlidersHorizontal,
   Trash2,
   RotateCcw,
@@ -62,6 +61,7 @@ import type {
   ThinkingLevelMap,
   ThinkingMapSource,
 } from './types';
+import { useI18n, type Translate } from './i18n';
 
 type NavId = 'providers' | 'models' | 'profiles' | 'diagnostics';
 
@@ -77,26 +77,26 @@ function projectName(projectPath: string) {
   return projectPath.split(/[\\/]/).filter(Boolean).at(-1) || projectPath;
 }
 
-function providerKindLabel(kind: ProviderState['kind']) {
-  if (kind === 'native-subscription') return 'Pi 原生订阅';
-  if (kind === 'local-bridge') return '本地桥接';
-  return 'API 中转';
+function providerKindLabel(kind: ProviderState['kind'], t: Translate) {
+  if (kind === 'native-subscription') return t('kind.native');
+  if (kind === 'local-bridge') return t('kind.bridge');
+  return t('kind.api');
 }
 
-function statusMeta(status: ProviderState['status']) {
-  if (status === 'ready') return { label: '已就绪', className: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' };
-  if (status === 'offline') return { label: '桥接离线', className: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' };
-  if (status === 'error') return { label: '配置错误', className: 'text-red-600 dark:text-red-400', dot: 'bg-red-500' };
-  return { label: '未配置', className: 'text-surface-500 dark:text-surface-400', dot: 'bg-surface-300 dark:bg-surface-600' };
+function statusMeta(status: ProviderState['status'], t: Translate) {
+  if (status === 'ready') return { label: t('status.ready'), className: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' };
+  if (status === 'offline') return { label: t('status.offline'), className: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' };
+  if (status === 'error') return { label: t('status.error'), className: 'text-red-600 dark:text-red-400', dot: 'bg-red-500' };
+  return { label: t('status.unconfigured'), className: 'text-surface-500 dark:text-surface-400', dot: 'bg-surface-300 dark:bg-surface-600' };
 }
 
 const PI_THINKING_LEVELS: ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
-const THINKING_MAP_SOURCE_LABELS: Record<ThinkingMapSource, string> = {
-  'provider-default': 'Provider 默认',
-  'provider-docs': '供应商文档',
-  'request-probe': '请求探测',
-  user: '用户手工',
-};
+function thinkingSourceLabel(source: ThinkingMapSource, t: Translate) {
+  if (source === 'provider-default') return t('thinkingSource.providerDefault');
+  if (source === 'provider-docs') return t('thinkingSource.providerDocs');
+  if (source === 'request-probe') return t('thinkingSource.requestProbe');
+  return t('thinkingSource.user');
+}
 
 function hasThinkingMapValue(map: ThinkingLevelMap, level: ThinkingLevel) {
   return Object.prototype.hasOwnProperty.call(map, level);
@@ -110,9 +110,9 @@ function supportedThinkingLevels(model: ModelDefinition): ThinkingLevel[] {
   });
 }
 
-function thinkingSummary(model: ModelDefinition) {
-  if (!model.reasoning) return '关闭';
-  return supportedThinkingLevels(model).filter((level) => level !== 'off').join(' / ') || '未验证';
+function thinkingSummary(model: ModelDefinition, t: Translate) {
+  if (!model.reasoning) return t('thinking.off');
+  return supportedThinkingLevels(model).filter((level) => level !== 'off').join(' / ') || t('thinking.unverified');
 }
 
 function serializeThinkingMap(map: ThinkingLevelMap) {
@@ -157,15 +157,16 @@ function resolveCycleEntries(modelRefs: string[], providers: ProviderState[]) {
   return modelRefs.map((ref, index) => ({ ...resolveCycleEntry(ref, providers), index }));
 }
 
-function cycleEntryLabel(entry: CycleListEntry) {
-  return entry.providerId && entry.modelId ? `${entry.providerId}/${entry.modelId}` : entry.ref || '无效引用';
+function cycleEntryLabel(entry: CycleListEntry, t: Translate) {
+  return entry.providerId && entry.modelId ? `${entry.providerId}/${entry.modelId}` : entry.ref || t('cycle.invalidRef');
 }
 
 function Sidebar({ activeNav, onNavigate, piInstalled }: { activeNav: NavId; onNavigate: (nav: NavId) => void; piInstalled: boolean }) {
+  const { t, locale, setLocale } = useI18n();
   const workspaceItems: Array<{ id: NavId; label: string; icon: ReactNode }> = [
-    { id: 'providers', label: '供应商与账号', icon: <Server size={16} strokeWidth={2.3} /> },
-    { id: 'models', label: '模型资源库', icon: <Boxes size={16} strokeWidth={2.3} /> },
-    { id: 'profiles', label: '导入本机 Pi', icon: <SlidersHorizontal size={16} strokeWidth={2.3} /> },
+    { id: 'providers', label: t('nav.providers'), icon: <Server size={16} strokeWidth={2.3} /> },
+    { id: 'models', label: t('nav.models'), icon: <Boxes size={16} strokeWidth={2.3} /> },
+    { id: 'profiles', label: t('nav.profiles'), icon: <SlidersHorizontal size={16} strokeWidth={2.3} /> },
   ];
 
   return (
@@ -178,7 +179,7 @@ function Sidebar({ activeNav, onNavigate, piInstalled }: { activeNav: NavId; onN
       </div>
 
       <nav className="flex-1 overflow-y-auto p-4">
-        <div className="mb-3 mt-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-surface-400">工作区 Workspace</div>
+        <div className="mb-3 mt-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-surface-400">{t('nav.workspace')}</div>
         <div className="space-y-0.5">
           {workspaceItems.map((item) => (
             <button
@@ -195,7 +196,7 @@ function Sidebar({ activeNav, onNavigate, piInstalled }: { activeNav: NavId; onN
           ))}
         </div>
 
-        <div className="mb-3 mt-8 px-3 text-[10px] font-semibold uppercase tracking-widest text-surface-400">系统 System</div>
+        <div className="mb-3 mt-8 px-3 text-[10px] font-semibold uppercase tracking-widest text-surface-400">{t('nav.system')}</div>
         <button
           type="button"
           onClick={() => onNavigate('diagnostics')}
@@ -204,23 +205,31 @@ function Sidebar({ activeNav, onNavigate, piInstalled }: { activeNav: NavId; onN
             : 'text-surface-500 hover:bg-surface-200/30 hover:text-surface-900 dark:hover:bg-surface-900 dark:hover:text-surface-50'}`}
         >
           <span className="mr-2.5 opacity-70"><Activity size={16} strokeWidth={2.3} /></span>
-          系统诊断
+          {t('nav.diagnostics')}
         </button>
-        <button
-          type="button"
-          disabled
-          title="全局设置尚未接入"
-          className="flex w-full cursor-not-allowed items-center rounded-md px-3 py-2 text-left text-[13px] font-medium text-surface-400 opacity-70"
-        >
-          <span className="mr-2.5"><Settings2 size={16} strokeWidth={2.3} /></span>
-          全局设置
-        </button>
+        <div className="mt-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-surface-400">{t('nav.language')}</div>
+        <div className="mt-1 flex gap-1 px-3">
+          <button
+            type="button"
+            onClick={() => setLocale('zh')}
+            className={`flex-1 rounded-md px-2 py-1.5 text-[12px] font-medium ${locale === 'zh' ? 'bg-surface-200/50 text-surface-900 dark:bg-surface-800 dark:text-surface-50' : 'text-surface-500 hover:bg-surface-200/30 dark:hover:bg-surface-900'}`}
+          >
+            {t('nav.languageZh')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLocale('en')}
+            className={`flex-1 rounded-md px-2 py-1.5 text-[12px] font-medium ${locale === 'en' ? 'bg-surface-200/50 text-surface-900 dark:bg-surface-800 dark:text-surface-50' : 'text-surface-500 hover:bg-surface-200/30 dark:hover:bg-surface-900'}`}
+          >
+            {t('nav.languageEn')}
+          </button>
+        </div>
       </nav>
 
       <div className="border-t border-surface-200 p-4 dark:border-surface-800">
         <div className="flex items-center px-2 text-[11px] font-medium text-surface-500">
           <span className={`mr-2 h-1.5 w-1.5 rounded-full ${piInstalled ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-amber-500'}`} />
-          {piInstalled ? 'Pi 环境已检测' : 'Pi 环境未检测'}
+          {piInstalled ? t('nav.piDetected') : t('nav.piMissing')}
         </div>
       </div>
     </aside>
@@ -228,6 +237,7 @@ function Sidebar({ activeNav, onNavigate, piInstalled }: { activeNav: NavId; onN
 }
 
 function Topbar({ state, onRefresh, refreshing }: { state: ManagerState; onRefresh: () => void; refreshing: boolean }) {
+  const { t } = useI18n();
   return (
     <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-surface-200 bg-white/85 px-8 backdrop-blur-md dark:border-surface-800 dark:bg-surface-950/85">
       <div className="flex min-w-0 items-center text-[13px] font-medium text-surface-500">
@@ -241,22 +251,22 @@ function Topbar({ state, onRefresh, refreshing }: { state: ManagerState; onRefre
             <span className="truncate font-mono text-[12px] text-surface-500">{state.active.modelId}</span>
           </>
         ) : (
-          <span className="ml-2 text-surface-400">· 尚未配置模型</span>
+          <span className="ml-2 text-surface-400">· {t('topbar.noModel')}</span>
         )}
       </div>
       <div className="ml-4 flex shrink-0 items-center gap-3">
         {state.runtime.lastError && (
           <span className="flex items-center text-[12px] font-medium text-red-600 dark:text-red-400" title={state.runtime.lastError}>
             <CircleAlert size={14} className="mr-1.5" />
-            最近有错误
+            {t('topbar.recentError')}
           </span>
         )}
         <button
           type="button"
           onClick={onRefresh}
           disabled={refreshing}
-          title="重新读取状态"
-          aria-label="重新读取状态"
+          title={t('topbar.refresh')}
+          aria-label={t('topbar.refresh')}
           className="flex h-8 w-8 items-center justify-center rounded-md text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-900 disabled:cursor-wait disabled:opacity-50 dark:hover:bg-surface-800 dark:hover:text-white"
         >
           <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
@@ -277,7 +287,8 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
   onEdit?: () => void;
   onDelete: () => void;
 }) {
-  const meta = statusMeta(provider.status);
+  const { t } = useI18n();
+  const meta = statusMeta(provider.status, t);
   const isNative = provider.kind === 'native-subscription';
   const canEdit = isCustomApiProvider(provider);
   const canDelete = canEdit;
@@ -296,45 +307,45 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
           </div>
         </div>
         <span className="ml-2 shrink-0 rounded-full border border-surface-200 bg-surface-100 px-2 py-0.5 text-[10px] font-medium tracking-wide text-surface-600 dark:border-surface-700/50 dark:bg-surface-800 dark:text-surface-400">
-          {providerKindLabel(provider.kind)}
+          {providerKindLabel(provider.kind, t)}
         </span>
       </div>
 
       <div className="flex-1 space-y-4 px-5 text-[13px] text-surface-600 dark:text-surface-400">
         <div className="flex items-center justify-between border-b border-surface-100 pb-3 dark:border-surface-800/50">
-          <span className="font-medium text-surface-500">认证状态</span>
+          <span className="font-medium text-surface-500">{t('card.authStatus')}</span>
           <div className={`flex items-center font-medium ${meta.className}`}>
             <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-            {isNative ? (provider.status === 'ready' ? 'Pi 已授权' : '需要 Pi 登录') : (provider.credentialConfigured ? 'API Key 已配置' : 'API Key 未配置')}
+            {isNative ? (provider.status === 'ready' ? t('card.nativeAuthorized') : t('card.nativeNeedsLogin')) : (provider.credentialConfigured ? t('card.apiKeyConfigured') : t('card.apiKeyMissing'))}
           </div>
         </div>
 
         <div className="flex items-center justify-between border-b border-surface-100 pb-3 dark:border-surface-800/50">
-          <span className="font-medium text-surface-500">接入节点</span>
+          <span className="font-medium text-surface-500">{t('card.endpoint')}</span>
           {provider.baseUrl ? (
             <span className="max-w-[180px] truncate font-mono text-[11px] text-surface-600 dark:text-surface-400" title={provider.baseUrl}>{provider.baseUrl}</span>
           ) : (
-            <span className="font-mono text-[11px] text-surface-400">Pi 原生</span>
+            <span className="font-mono text-[11px] text-surface-400">{t('card.nativeShort')}</span>
           )}
         </div>
 
         <div className="flex items-center justify-between border-b border-surface-100 pb-3 dark:border-surface-800/50">
-          <span className="font-medium text-surface-500">模型数量</span>
+          <span className="font-medium text-surface-500">{t('card.modelCount')}</span>
           <span className="font-mono text-[12px] text-surface-900 dark:text-surface-200">{provider.models.length}</span>
         </div>
 
         <div className="rounded-md bg-surface-50 p-3 dark:bg-surface-800/30">
           <div className="flex items-center text-[12px] font-medium text-surface-900 dark:text-surface-200">
             <Activity size={14} className="mr-2 text-surface-400" />
-            接入状态
+            {t('card.accessStatus')}
           </div>
           <p className="mt-1 pl-[22px] text-[11px] leading-4 text-surface-500">{provider.detail}</p>
         </div>
         {testResult && (
           <div className={`rounded-md border p-3 text-[11px] leading-4 ${testResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300' : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300'}`}>
             <div className="flex items-center justify-between gap-3">
-              <span className="font-medium">连接测试</span>
-              <span className="font-mono">{testResult.ok ? '通过' : '失败'} · {testResult.category}</span>
+              <span className="font-medium">{t('card.connectionTest')}</span>
+              <span className="font-mono">{testResult.ok ? t('card.testPass') : t('card.testFail')} · {testResult.category}</span>
             </div>
             <div className="mt-1">{testResult.message}</div>
             <div className="mt-1 font-mono text-[10px] opacity-80">{testResult.detail}</div>
@@ -343,13 +354,13 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
       </div>
 
       <div className="flex items-center justify-between border-t border-surface-100 bg-surface-50/30 px-3 py-3 dark:border-surface-800/50 dark:bg-[#0a0a0a]">
-        <span className="px-2.5 text-[11px] text-surface-500">实际使用模型在模型资源库配置</span>
+        <span className="px-2.5 text-[11px] text-surface-500">{t('card.modelsHint')}</span>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={onTest}
-            title="测试供应商连接"
-            aria-label={`测试 ${provider.name} 连接`}
+            title={t('card.testTitle')}
+            aria-label={t('card.testAria', { name: provider.name })}
             className="flex h-8 w-8 items-center justify-center rounded-md text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-white"
           >
             <CheckCircle2 size={14} />
@@ -357,8 +368,8 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
           <button
             type="button"
             onClick={onRefresh}
-            title="刷新供应商状态"
-            aria-label={`刷新 ${provider.name} 状态`}
+            title={t('card.refreshTitle')}
+            aria-label={t('card.refreshAria', { name: provider.name })}
             className="flex h-8 w-8 items-center justify-center rounded-md text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-white"
           >
             <RefreshCw size={14} />
@@ -367,8 +378,8 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
             <button
               type="button"
               onClick={onLogin}
-              title="登录 Pi 原生渠道"
-              aria-label={`登录 ${provider.name}`}
+              title={t('card.loginTitle')}
+              aria-label={t('card.loginAria', { name: provider.name })}
               className="flex h-8 w-8 items-center justify-center rounded-md text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-white"
             >
               <KeyRound size={14} />
@@ -378,8 +389,8 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
             <button
               type="button"
               onClick={onLogout}
-              title="退出 Pi 原生登录"
-              aria-label={`退出 ${provider.name}`}
+              title={t('card.logoutTitle')}
+              aria-label={t('card.logoutAria', { name: provider.name })}
               className="flex h-8 w-8 items-center justify-center rounded-md text-surface-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
             >
               <X size={14} />
@@ -389,8 +400,8 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
             <button
               type="button"
               onClick={onCredential}
-              title="配置 API Key"
-              aria-label={`配置 ${provider.name} API Key`}
+              title={t('card.credentialTitle')}
+              aria-label={t('card.credentialAria', { name: provider.name })}
               className="flex h-8 w-8 items-center justify-center rounded-md text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-white"
             >
               <KeyRound size={14} />
@@ -400,8 +411,8 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
             <button
               type="button"
               onClick={onEdit}
-              title="编辑供应商"
-              aria-label={`编辑 ${provider.name}`}
+              title={t('card.editTitle')}
+              aria-label={t('card.editAria', { name: provider.name })}
               className="flex h-8 w-8 items-center justify-center rounded-md text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-white"
             >
               <Pencil size={14} />
@@ -411,8 +422,8 @@ function ProviderCard({ provider, testResult, onTest, onRefresh, onCredential, o
             <button
               type="button"
               onClick={onDelete}
-              title="删除供应商"
-              aria-label={`删除 ${provider.name}`}
+              title={t('card.deleteTitle')}
+              aria-label={t('card.deleteAria', { name: provider.name })}
               className="flex h-8 w-8 items-center justify-center rounded-md text-surface-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
             >
               <Trash2 size={14} />
@@ -438,6 +449,7 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
   onDelete: (provider: ProviderState) => void;
   onNativeLogin: () => void;
 }) {
+  const { t } = useI18n();
   const [filter, setFilter] = useState<'all' | 'ready' | 'native'>('all');
   const [query, setQuery] = useState('');
   const isTrulyEmpty = state.providers.length === 0 && !query.trim();
@@ -459,8 +471,8 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">供应商与账号</h1>
-          <p className="mt-1 text-[14px] text-surface-500">管理 Pi 原生账号、API 凭据和第三方中转；实际使用模型在模型资源库配置。</p>
+          <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">{t('providers.title')}</h1>
+          <p className="mt-1 text-[14px] text-surface-500">{t('providers.subtitle')}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
@@ -469,7 +481,7 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
             className="flex h-9 items-center rounded-md border border-surface-200 bg-white px-4 text-[13px] font-medium text-surface-700 shadow-sm transition-colors hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200 dark:hover:bg-surface-800"
           >
             <Download size={16} className="mr-2 opacity-70" />
-            从本机 Pi 导入
+            {t('providers.importPi')}
           </button>
           <button
             type="button"
@@ -477,7 +489,7 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
             className="flex h-9 items-center rounded-md border border-surface-200 bg-white px-4 text-[13px] font-medium text-surface-700 shadow-sm transition-colors hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200 dark:hover:bg-surface-800"
           >
             <KeyRound size={16} className="mr-2 opacity-70" />
-            登录原生渠道
+            {t('providers.loginNative')}
           </button>
           <button
             type="button"
@@ -485,7 +497,7 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
             className="flex h-9 items-center rounded-md bg-surface-950 px-4 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-surface-800 dark:bg-white dark:text-surface-950 dark:hover:bg-surface-200"
           >
             <Plus size={16} className="mr-2 opacity-70" />
-            新增供应商
+            {t('providers.add')}
           </button>
         </div>
       </div>
@@ -493,9 +505,9 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
       <div className="flex flex-col items-start justify-between gap-4 border-b border-surface-200 pb-2 md:flex-row md:items-center dark:border-surface-800">
         <div className="flex w-full items-center gap-6 overflow-x-auto md:w-auto">
           {[
-            ['all', `全部账号 ${state.providers.length}`],
-            ['ready', `已连接 ${state.providers.filter((provider) => provider.status === 'ready').length}`],
-            ['native', `Pi 原生 ${state.providers.filter((provider) => provider.kind === 'native-subscription').length}`],
+            ['all', t('providers.filterAll', { count: state.providers.length })],
+            ['ready', t('providers.filterReady', { count: state.providers.filter((provider) => provider.status === 'ready').length })],
+            ['native', t('providers.filterNative', { count: state.providers.filter((provider) => provider.kind === 'native-subscription').length })],
           ].map(([value, label]) => (
             <button
               key={value}
@@ -515,8 +527,8 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索供应商或 ID"
-            aria-label="搜索供应商或 ID"
+            placeholder={t('providers.search')}
+            aria-label={t('providers.search')}
             className="w-full rounded-md border border-surface-200 bg-white py-1.5 pl-8 pr-3 text-[13px] text-surface-900 outline-none transition-colors placeholder:text-surface-400 focus:border-surface-400 focus:ring-1 focus:ring-surface-400 dark:border-surface-700 dark:bg-[#0a0a0a] dark:text-white"
           />
         </div>
@@ -542,21 +554,21 @@ function ProvidersPage({ state, testResults, onAdd, onImport, onRefresh, onTest,
       ) : isTrulyEmpty ? (
         <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-surface-300 bg-white/60 px-6 text-center dark:border-surface-800 dark:bg-[#0a0a0a]/60">
           <Server size={22} className="mb-3 text-surface-400" />
-          <h2 className="text-[14px] font-medium text-surface-900 dark:text-white">还没有任何供应商</h2>
-          <p className="mt-1 text-[13px] text-surface-500">从本机 Pi 勾选导入，或新增 API 中转，或登录原生渠道。</p>
+          <h2 className="text-[14px] font-medium text-surface-900 dark:text-white">{t('providers.emptyTitle')}</h2>
+          <p className="mt-1 text-[13px] text-surface-500">{t('providers.emptyBody')}</p>
           <div className="mt-4 flex items-center gap-2">
             <button type="button" onClick={onImport} className="flex h-9 items-center rounded-md bg-surface-950 px-4 text-[13px] font-medium text-white hover:bg-surface-800 dark:bg-white dark:text-surface-950 dark:hover:bg-surface-200">
               <Download size={15} className="mr-2 opacity-70" />
-              从本机 Pi 导入
+              {t('providers.importPi')}
             </button>
-            <button type="button" onClick={onNativeLogin} className="flex h-9 items-center rounded-md border border-surface-200 bg-white px-4 text-[13px] font-medium text-surface-700 hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200">登录原生渠道</button>
+            <button type="button" onClick={onNativeLogin} className="flex h-9 items-center rounded-md border border-surface-200 bg-white px-4 text-[13px] font-medium text-surface-700 hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200">{t('providers.loginNative')}</button>
           </div>
         </div>
       ) : (
         <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-surface-300 bg-white/60 text-center dark:border-surface-800 dark:bg-[#0a0a0a]/60">
           <Search size={22} className="mb-3 text-surface-400" />
-          <h2 className="text-[14px] font-medium text-surface-900 dark:text-white">没有匹配的供应商</h2>
-          <p className="mt-1 text-[13px] text-surface-500">清除搜索或添加新的 API 中转。</p>
+          <h2 className="text-[14px] font-medium text-surface-900 dark:text-white">{t('providers.noMatchTitle')}</h2>
+          <p className="mt-1 text-[13px] text-surface-500">{t('providers.noMatchBody')}</p>
         </div>
       )}
     </div>
@@ -569,6 +581,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (state: ManagerState, notice: string) => void;
 }) {
+  const { t } = useI18n();
   const editing = Boolean(provider);
   const [name, setName] = useState(provider?.name || '');
   const [id, setId] = useState(provider?.id || '');
@@ -587,7 +600,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
 
   const discover = async () => {
     if (!baseUrl.trim()) {
-      setDiscoveryError('请先填写 Base URL。');
+      setDiscoveryError(t('editor.needBaseUrl'));
       return;
     }
     setDiscovering(true);
@@ -595,14 +608,14 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
     try {
       const response = await discoverProviderModels({ baseUrl: baseUrl.trim(), apiKey: apiKey.trim() || undefined });
       if (!response.result.ok) {
-        setDiscoveryError(`${response.result.message}。仍可手工填写模型。`);
+        setDiscoveryError(t('editor.discoverPartial', { message: response.result.message }));
         return;
       }
       setDiscoveredModels(response.result.models);
       setSelectedModelIds(response.result.models.map((model) => model.id));
       setModels(response.result.models.map((model) => model.id).join(', '));
     } catch (caughtError) {
-      setDiscoveryError(caughtError instanceof ApiError ? caughtError.message : '获取上游模型失败。仍可手工填写模型。');
+      setDiscoveryError(caughtError instanceof ApiError ? caughtError.message : t('editor.discoverFailed'));
     } finally {
       setDiscovering(false);
     }
@@ -634,11 +647,11 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
         ...(model.maxTokens ? { maxTokens: model.maxTokens } : {})
       }));
     if (discoveredModels.length > 0 && selectedModels.length === 0) {
-      setError('请至少勾选一个上游模型，或清除上游目录后手工填写。');
+      setError(t('editor.needSelection'));
       return;
     }
     if (discoveredModels.length === 0 && modelIds.length === 0) {
-      setError('至少填写一个模型 ID。');
+      setError(t('editor.needModelId'));
       return;
     }
     setSubmitting(true);
@@ -652,7 +665,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
           models: discoveredModels.length > 0 ? selectedModels : modelIds,
           apiKey: apiKey.trim() || undefined,
         });
-        onSaved(response.state, '供应商已更新为候选配置');
+        onSaved(response.state, t('editor.updated'));
       } else {
         const input: CreateProviderInput = {
           id: id.trim() || undefined,
@@ -663,11 +676,11 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
           apiKey: apiKey.trim() || undefined,
         };
         const response = await createProvider(input);
-        onSaved(response.state, '供应商已保存为候选配置');
+        onSaved(response.state, t('editor.created'));
       }
       onClose();
     } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : '保存失败，请稍后重试。');
+      setError(caughtError instanceof ApiError ? caughtError.message : t('editor.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -678,21 +691,21 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
       <div className="w-full max-w-lg overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="provider-editor-title">
         <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
           <div>
-            <h2 id="provider-editor-title" className="text-[16px] font-bold text-surface-900 dark:text-white">{editing ? '编辑 API 中转' : '新增 API 中转'}</h2>
-            <p className="mt-1 text-[12px] text-surface-500">OpenAI 兼容接口</p>
+            <h2 id="provider-editor-title" className="text-[16px] font-bold text-surface-900 dark:text-white">{editing ? t('editor.editTitle') : t('editor.createTitle')}</h2>
+            <p className="mt-1 text-[12px] text-surface-500">{t('editor.compat')}</p>
           </div>
-          <button type="button" onClick={onClose} disabled={submitting} title="关闭" aria-label="关闭" className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
+          <button type="button" onClick={onClose} disabled={submitting} title={t('common.close')} aria-label={t('common.close')} className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
         </div>
 
         <form onSubmit={submit}>
           <div className="space-y-4 p-6">
             <label className="block space-y-1.5">
-              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">显示名称</span>
-              <input required value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：公司中转" autoFocus className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('editor.displayName')}</span>
+              <input required value={name} onChange={(event) => setName(event.target.value)} placeholder={t('editor.namePlaceholder')} autoFocus className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
             </label>
             <label className="block space-y-1.5">
-              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Provider ID <span className="font-normal text-surface-400">可选</span></span>
-              <input value={id} onChange={(event) => setId(event.target.value)} placeholder="例如：company-relay" pattern="[A-Za-z0-9_-]+" title="仅支持字母、数字、下划线和连字符" className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Provider ID <span className="font-normal text-surface-400">{t('common.optional')}</span></span>
+              <input value={id} onChange={(event) => setId(event.target.value)} placeholder={t('editor.idPlaceholder')} pattern="[A-Za-z0-9_-]+" title={t('editor.idPattern')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
             </label>
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Base URL</span>
@@ -701,50 +714,50 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">上游模型目录</span>
-                  <p className="mt-0.5 text-[11px] text-surface-500">获取后勾选并编辑；右边的「思考」表示这个模型能否开 Thinking。</p>
+                  <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('editor.catalog')}</span>
+                  <p className="mt-0.5 text-[11px] text-surface-500">{t('editor.catalogHint')}</p>
                 </div>
                 <button type="button" onClick={() => void discover()} disabled={discovering} className="inline-flex h-8 shrink-0 items-center rounded-md border border-surface-200 px-3 text-[12px] font-medium text-surface-700 hover:bg-surface-50 disabled:cursor-wait disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800">
                   {discovering && <Loader2 size={13} className="mr-1.5 animate-spin" />}
-                  获取模型
+                  {t('editor.fetchModels')}
                 </button>
               </div>
               {discoveredModels.length > 0 && <div className="space-y-2 rounded-md border border-surface-200 p-2 dark:border-surface-700">
                 <div className="flex items-center gap-2">
-                  <input value={discoveryQuery} onChange={(event) => setDiscoveryQuery(event.target.value)} placeholder="搜索上游模型" className="min-w-0 flex-1 rounded border border-surface-200 bg-surface-50 px-2 py-1.5 text-[12px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
-                  <button type="button" onClick={() => setSelectedModelIds(visibleDiscoveredModels.map((model) => model.id))} className="shrink-0 text-[11px] text-primary-600 hover:underline dark:text-primary-400">全选</button>
-                  <button type="button" onClick={() => setSelectedModelIds([])} className="shrink-0 text-[11px] text-surface-500 hover:underline">清空</button>
+                  <input value={discoveryQuery} onChange={(event) => setDiscoveryQuery(event.target.value)} placeholder={t('editor.searchUpstream')} className="min-w-0 flex-1 rounded border border-surface-200 bg-surface-50 px-2 py-1.5 text-[12px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+                  <button type="button" onClick={() => setSelectedModelIds(visibleDiscoveredModels.map((model) => model.id))} className="shrink-0 text-[11px] text-primary-600 hover:underline dark:text-primary-400">{t('common.selectAll')}</button>
+                  <button type="button" onClick={() => setSelectedModelIds([])} className="shrink-0 text-[11px] text-surface-500 hover:underline">{t('common.clear')}</button>
                 </div>
                 <div className="max-h-48 space-y-1 overflow-y-auto">
                 {visibleDiscoveredModels.map((model) => (
                   <div key={model.id} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-surface-50 dark:hover:bg-surface-800/60">
-                    <input type="checkbox" checked={selectedModelIds.includes(model.id)} onChange={(event) => setSelectedModelIds((current) => event.target.checked ? [...current, model.id] : current.filter((id) => id !== model.id))} aria-label={`选择 ${model.id}`} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
-                    <input value={model.id} onChange={(event) => updateDiscoveredModel(model.id, { id: event.target.value })} aria-label={`${model.id} 模型 ID`} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 font-mono text-[12px] text-surface-900 outline-none focus:border-surface-300 focus:bg-white dark:text-white dark:focus:border-surface-600 dark:focus:bg-surface-900" />
-                    <input value={model.name} onChange={(event) => updateDiscoveredModel(model.id, { name: event.target.value })} aria-label={`${model.id} 显示名称`} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 text-[12px] text-surface-700 outline-none focus:border-surface-300 focus:bg-white dark:text-surface-200 dark:focus:border-surface-600 dark:focus:bg-surface-900" />
-                    <label className="flex shrink-0 items-center gap-1 text-[10px] text-surface-400" title="勾选后可在模型页配置 Thinking 等级；未勾选则只能关闭思考。"><input type="checkbox" checked={model.reasoning} onChange={(event) => updateDiscoveredModel(model.id, { reasoning: event.target.checked })} aria-label={`${model.id} 支持 Thinking`} />思考</label>
+                    <input type="checkbox" checked={selectedModelIds.includes(model.id)} onChange={(event) => setSelectedModelIds((current) => event.target.checked ? [...current, model.id] : current.filter((id) => id !== model.id))} aria-label={t('editor.selectModel', { id: model.id })} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
+                    <input value={model.id} onChange={(event) => updateDiscoveredModel(model.id, { id: event.target.value })} aria-label={t('editor.modelIdAria', { id: model.id })} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 font-mono text-[12px] text-surface-900 outline-none focus:border-surface-300 focus:bg-white dark:text-white dark:focus:border-surface-600 dark:focus:bg-surface-900" />
+                    <input value={model.name} onChange={(event) => updateDiscoveredModel(model.id, { name: event.target.value })} aria-label={t('editor.modelNameAria', { id: model.id })} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 text-[12px] text-surface-700 outline-none focus:border-surface-300 focus:bg-white dark:text-surface-200 dark:focus:border-surface-600 dark:focus:bg-surface-900" />
+                    <label className="flex shrink-0 items-center gap-1 text-[10px] text-surface-400" title={t('editor.thinkingHint')}><input type="checkbox" checked={model.reasoning} onChange={(event) => updateDiscoveredModel(model.id, { reasoning: event.target.checked })} aria-label={t('editor.thinkingAria', { id: model.id })} />{t('common.thinking')}</label>
                   </div>
                 ))}
-                {visibleDiscoveredModels.length === 0 && <p className="px-2 py-3 text-[11px] text-surface-500">没有匹配的上游模型。</p>}
+                {visibleDiscoveredModels.length === 0 && <p className="px-2 py-3 text-[11px] text-surface-500">{t('editor.noUpstreamMatch')}</p>}
                 </div>
               </div>}
-              <input value={models} onChange={(event) => { setModels(event.target.value); setSelectedModelIds([]); }} placeholder="手工填写：gpt-5.6-luna, grok-4.6" className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+              <input value={models} onChange={(event) => { setModels(event.target.value); setSelectedModelIds([]); }} placeholder={t('editor.manualPlaceholder')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
               {discoveryError && <p className="text-[11px] leading-4 text-amber-600 dark:text-amber-400">{discoveryError}</p>}
             </div>
             <label className="block space-y-1.5">
-              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">API Key <span className="font-normal text-surface-400">可选</span></span>
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">API Key <span className="font-normal text-surface-400">{t('common.optional')}</span></span>
               <div className="relative">
                 <KeyRound size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
-                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" autoComplete="new-password" placeholder={editing ? (provider?.credentialConfigured ? '留空则保留已有密钥' : '留空则稍后配置') : '留空则稍后配置'} className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" autoComplete="new-password" placeholder={editing ? (provider?.credentialConfigured ? t('editor.keepKey') : t('editor.laterKey')) : t('editor.laterKey')} className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
               </div>
-              <p className="text-[11px] text-surface-500">只显示配置状态，不在界面回显密钥。</p>
+              <p className="text-[11px] text-surface-500">{t('editor.keyHint')}</p>
             </label>
             {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
           </div>
           <div className="flex justify-end gap-3 border-t border-surface-100 bg-surface-50 p-5 dark:border-surface-800 dark:bg-surface-900/50">
-            <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 transition-colors hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">取消</button>
+            <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 transition-colors hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">{t('common.cancel')}</button>
             <button type="submit" disabled={submitting} className="flex items-center rounded-md bg-surface-950 px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-surface-800 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-surface-950 dark:hover:bg-surface-200">
               {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
-              保存为候选配置
+              {t('common.saveCandidate')}
             </button>
           </div>
         </form>
@@ -758,6 +771,7 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (state: ManagerState, notice: string) => void;
 }) {
+  const { t } = useI18n();
   const [preview, setPreview] = useState<PiImportPreview | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -775,7 +789,7 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
         if (!cancelled) setPreview(response.preview);
       })
       .catch((caughtError) => {
-        if (!cancelled) setError(caughtError instanceof ApiError ? caughtError.message : '无法读取本机 Pi 配置。');
+        if (!cancelled) setError(caughtError instanceof ApiError ? caughtError.message : t('import.readFailed'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -783,7 +797,7 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [isOpen, t]);
 
   if (!isOpen) return null;
 
@@ -799,10 +813,10 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
     setError('');
     try {
       const response = await importPiProviders(overwrite, selectedIds);
-      onSaved(response.state, `已导入 ${response.result.imported.length} 个本机 Pi 渠道`);
+      onSaved(response.state, t('import.imported', { count: response.result.imported.length }));
       onClose();
     } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : '导入失败。');
+      setError(caughtError instanceof ApiError ? caughtError.message : t('import.failed'));
     } finally {
       setSubmitting(false);
     }
@@ -813,18 +827,18 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
       <div className="w-full max-w-xl overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="import-pi-title">
         <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
           <div>
-            <h2 id="import-pi-title" className="text-[16px] font-bold text-surface-900 dark:text-white">从本机 Pi 导入</h2>
-            <p className="mt-1 text-[12px] text-surface-500">只读读取 models.json 中的 OpenAI 兼容渠道，不修改源文件。</p>
+            <h2 id="import-pi-title" className="text-[16px] font-bold text-surface-900 dark:text-white">{t('import.title')}</h2>
+            <p className="mt-1 text-[12px] text-surface-500">{t('import.subtitle')}</p>
           </div>
-          <button type="button" onClick={onClose} disabled={submitting} title="关闭" aria-label="关闭" className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
+          <button type="button" onClick={onClose} disabled={submitting} title={t('common.close')} aria-label={t('common.close')} className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
         </div>
         <div className="max-h-[420px] space-y-4 overflow-y-auto p-6">
-          {loading && <div className="flex items-center text-[13px] text-surface-500"><Loader2 size={14} className="mr-2 animate-spin" />正在读取本机 Pi 配置</div>}
+          {loading && <div className="flex items-center text-[13px] text-surface-500"><Loader2 size={14} className="mr-2 animate-spin" />{t('import.reading')}</div>}
           {preview && (
             <>
-              <div className="truncate font-mono text-[11px] text-surface-400" title={preview.modelsPath}>{preview.modelsPath || '未找到 models.json'}</div>
+              <div className="truncate font-mono text-[11px] text-surface-400" title={preview.modelsPath}>{preview.modelsPath || t('import.noModelsJson')}</div>
               {preview.candidates.length === 0 ? (
-                <p className="text-[13px] text-surface-500">没有可导入的 OpenAI 兼容渠道。</p>
+                <p className="text-[13px] text-surface-500">{t('import.empty')}</p>
               ) : (
                 <ul className="space-y-2">
                   {preview.candidates.map((candidate) => (
@@ -834,7 +848,7 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
                           type="checkbox"
                           checked={selectedIds.includes(candidate.id)}
                           onChange={() => toggleSelected(candidate.id)}
-                          aria-label={`导入 ${candidate.name}`}
+                          aria-label={t('import.importAria', { name: candidate.name })}
                           className="mt-1 h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500"
                         />
                         <span className="min-w-0 flex-1">
@@ -843,27 +857,27 @@ function ImportPiModal({ isOpen, onClose, onSaved }: {
                             <span className="font-mono text-surface-400">{candidate.id}</span>
                           </span>
                           <span className="mt-1 block truncate font-mono text-[11px] text-surface-500">{candidate.baseUrl}</span>
-                          <span className="mt-1 block text-surface-500">{candidate.models.length} 个模型 · {candidate.credentialKind === 'literal' ? '将导入密钥到 Manager 凭据存储' : candidate.credentialKind === 'env' ? `引用 ${candidate.credentialEnv}` : '未配置密钥'}</span>
-                          {candidate.conflict && <span className="mt-1 block text-amber-600 dark:text-amber-400">与现有渠道冲突：{candidate.existingName || candidate.id}</span>}
+                          <span className="mt-1 block text-surface-500">{t('import.modelsCount', { count: candidate.models.length })} · {candidate.credentialKind === 'literal' ? t('import.willStoreKey') : candidate.credentialKind === 'env' ? t('import.refEnv', { env: candidate.credentialEnv || '' }) : t('import.noKey')}</span>
+                          {candidate.conflict && <span className="mt-1 block text-amber-600 dark:text-amber-400">{t('import.conflict', { name: candidate.existingName || candidate.id })}</span>}
                         </span>
                       </label>
                     </li>
                   ))}
                 </ul>
               )}
-              {preview.skipped.length > 0 && <p className="text-[11px] text-surface-400">已跳过 {preview.skipped.map((item) => item.id).join(', ')}</p>}
+              {preview.skipped.length > 0 && <p className="text-[11px] text-surface-400">{t('import.skipped', { ids: preview.skipped.map((item) => item.id).join(', ') })}</p>}
             </>
           )}
           {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
         </div>
         <div className="flex justify-end gap-3 border-t border-surface-100 bg-surface-50 p-5 dark:border-surface-800 dark:bg-surface-900/50">
-          <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 transition-colors hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">取消</button>
+          <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 transition-colors hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">{t('common.cancel')}</button>
           {preview && preview.candidates.some((candidate) => candidate.conflict && selectedIds.includes(candidate.id)) && (
-            <button type="button" onClick={() => void importNow(true)} disabled={submitting || selectedIds.length === 0} className="rounded-md border border-amber-200 px-4 py-2 text-[13px] font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-500/30 dark:text-amber-300 dark:hover:bg-amber-500/10">覆盖冲突并导入</button>
+            <button type="button" onClick={() => void importNow(true)} disabled={submitting || selectedIds.length === 0} className="rounded-md border border-amber-200 px-4 py-2 text-[13px] font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-500/30 dark:text-amber-300 dark:hover:bg-amber-500/10">{t('import.overwriteConflict')}</button>
           )}
           <button type="button" onClick={() => void importNow(false)} disabled={submitting || !preview || selectedIds.length === 0} className="flex items-center rounded-md bg-surface-950 px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-surface-800 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-surface-950 dark:hover:bg-surface-200">
             {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
-            {selectedIds.length > 0 ? `导入 ${selectedIds.length} 个` : '导入'}
+            {selectedIds.length > 0 ? t('import.submitCount', { count: selectedIds.length }) : t('import.submit')}
           </button>
         </div>
       </div>
@@ -877,6 +891,7 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (state: ManagerState, notice: string) => void;
 }) {
+  const { t } = useI18n();
   const [authType, setAuthType] = useState<'oauth' | 'api_key'>('oauth');
   const [apiKey, setApiKey] = useState('');
   const [promptValue, setPromptValue] = useState('');
@@ -911,7 +926,7 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
         if (!cancelled) setFeatured(response.providers);
       })
       .catch((caughtError) => {
-        if (!cancelled) setError(caughtError instanceof ApiError ? caughtError.message : '无法读取原生渠道列表。');
+        if (!cancelled) setError(caughtError instanceof ApiError ? caughtError.message : t('login.listFailed'));
       })
       .finally(() => {
         if (!cancelled) setFeaturedLoading(false);
@@ -919,7 +934,7 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, provider?.id]);
+  }, [isOpen, provider?.id, t]);
 
   useEffect(() => {
     if (!isOpen || !login?.loginId || login.status === 'completed' || login.status === 'error') return undefined;
@@ -930,20 +945,20 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
           if (cancelled) return;
           setLogin(response.login);
           if (response.login.status === 'completed') {
-            onSaved(response.state, `${provider?.name || 'Pi 原生渠道'} 已登录`);
+            onSaved(response.state, t('login.loggedIn', { name: provider?.name || t('login.nativeFallback') }));
             onClose();
           }
-          if (response.login.status === 'error') setError(response.login.error || '登录失败。');
+          if (response.login.status === 'error') setError(response.login.error || t('login.failed'));
         })
         .catch((caughtError) => {
-          if (!cancelled) setError(caughtError instanceof ApiError ? caughtError.message : '无法读取登录状态。');
+          if (!cancelled) setError(caughtError instanceof ApiError ? caughtError.message : t('login.statusFailed'));
         });
     }, 1000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [isOpen, login?.loginId, login?.status, provider?.name]);
+  }, [isOpen, login?.loginId, login?.status, provider?.name, t]);
 
   if (!isOpen) return null;
   const activeProvider = selectedProvider || provider || null;
@@ -951,11 +966,11 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
   const startLogin = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
     if (!activeProvider) {
-      setError('请先选择要登录的原生渠道。');
+      setError(t('login.needProvider'));
       return;
     }
     if (authType === 'api_key' && !apiKey.trim()) {
-      setError('API Key 不能为空。');
+      setError(t('login.needApiKey'));
       return;
     }
     setSubmitting(true);
@@ -968,12 +983,12 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
       });
       setLogin(response.login);
       if (response.login.status === 'completed') {
-        onSaved(response.state, `${activeProvider.name} 已登录`);
+        onSaved(response.state, t('login.loggedIn', { name: activeProvider.name }));
         onClose();
       }
-      if (response.login.status === 'error') setError(response.login.error || '登录失败。');
+      if (response.login.status === 'error') setError(response.login.error || t('login.failed'));
     } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : '登录失败。');
+      setError(caughtError instanceof ApiError ? caughtError.message : t('login.failed'));
     } finally {
       setSubmitting(false);
     }
@@ -982,7 +997,7 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
   const submitPrompt = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!login?.loginId || !promptValue.trim()) {
-      setError('请填写登录所需的验证码或选项。');
+      setError(t('login.needInput'));
       return;
     }
     setSubmitting(true);
@@ -992,7 +1007,7 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
       setPromptValue('');
       setLogin(response.login);
     } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : '提交登录输入失败。');
+      setError(caughtError instanceof ApiError ? caughtError.message : t('login.submitFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -1003,28 +1018,28 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
       <div className="w-full max-w-md overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="native-login-title">
         <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
           <div>
-            <h2 id="native-login-title" className="text-[16px] font-bold text-surface-900 dark:text-white">登录 Pi 原生渠道</h2>
-            <p className="mt-1 text-[12px] text-surface-500">{activeProvider ? `${activeProvider.name} · ${activeProvider.id}` : '选择要登录的原生渠道'}</p>
+            <h2 id="native-login-title" className="text-[16px] font-bold text-surface-900 dark:text-white">{t('login.title')}</h2>
+            <p className="mt-1 text-[12px] text-surface-500">{activeProvider ? `${activeProvider.name} · ${activeProvider.id}` : t('login.pickProvider')}</p>
           </div>
-          <button type="button" onClick={onClose} disabled={submitting} title="关闭" aria-label="关闭" className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
+          <button type="button" onClick={onClose} disabled={submitting} title={t('common.close')} aria-label={t('common.close')} className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
         </div>
         <div className="space-y-4 p-6">
-          <div className="rounded-md bg-surface-50 px-3 py-2 text-[12px] text-surface-500 dark:bg-surface-900/50">凭据写入本机 Pi 的 auth.json，不复制 refresh token，也不在 Manager 状态里保存明文。</div>
+          <div className="rounded-md bg-surface-50 px-3 py-2 text-[12px] text-surface-500 dark:bg-surface-900/50">{t('login.authHint')}</div>
           {!login && !provider && (
             <label className="block space-y-1.5">
-              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">原生渠道</span>
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('login.channel')}</span>
               <select value={selectedProvider?.id || ''} onChange={(event) => { setSelectedProvider(featured.find((item) => item.id === event.target.value) || null); setAuthType('oauth'); setError(''); }} disabled={featuredLoading} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
-                <option value="">{featuredLoading ? '正在读取…' : '请选择'}</option>
+                <option value="">{featuredLoading ? t('login.reading') : t('login.pleaseSelect')}</option>
                 {featured.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.id}</option>)}
               </select>
             </label>
           )}
           {!login && activeProvider && methods.length > 1 && (
             <label className="block space-y-1.5">
-              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">登录方式</span>
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('login.method')}</span>
               <select value={authType} onChange={(event) => setAuthType(event.target.value as 'oauth' | 'api_key')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
-                {methods.includes('oauth') && <option value="oauth">订阅 OAuth</option>}
-                {methods.includes('api_key') && <option value="api_key">API Key</option>}
+                {methods.includes('oauth') && <option value="oauth">{t('login.oauth')}</option>}
+                {methods.includes('api_key') && <option value="api_key">{t('login.apiKeyMethod')}</option>}
               </select>
             </label>
           )}
@@ -1032,23 +1047,23 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
             <form onSubmit={(event) => void startLogin(event)} className="space-y-4">
               <label className="block space-y-1.5">
                 <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">API Key</span>
-                <input value={apiKey} onChange={(event) => { setApiKey(event.target.value); setError(''); }} type="password" autoComplete="new-password" autoFocus placeholder="不会回显已有密钥" className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+                <input value={apiKey} onChange={(event) => { setApiKey(event.target.value); setError(''); }} type="password" autoComplete="new-password" autoFocus placeholder={t('login.noEcho')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
               </label>
               <button type="submit" disabled={submitting} className="flex h-9 w-full items-center justify-center rounded-md bg-surface-950 text-[13px] font-medium text-white hover:bg-surface-800 disabled:opacity-60 dark:bg-white dark:text-surface-950">
                 {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
-                保存到 Pi auth.json
+                {t('login.saveAuth')}
               </button>
             </form>
           )}
           {!login && authType === 'oauth' && (
             <button type="button" onClick={() => void startLogin()} disabled={submitting} className="flex h-9 w-full items-center justify-center rounded-md bg-surface-950 text-[13px] font-medium text-white hover:bg-surface-800 disabled:opacity-60 dark:bg-white dark:text-surface-950">
               {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
-              打开浏览器登录
+              {t('login.openBrowser')}
             </button>
           )}
           {login?.authUrl && (
             <div className="space-y-2 rounded-md border border-surface-200 px-3 py-2 text-[12px] dark:border-surface-800">
-              <div className="text-surface-500">已打开授权页。若浏览器没有跳转，可手动打开：</div>
+              <div className="text-surface-500">{t('login.opened')}</div>
               <a href={login.authUrl} target="_blank" rel="noreferrer" className="block truncate font-mono text-primary-600 hover:underline dark:text-primary-400">{login.authUrl}</a>
             </div>
           )}
@@ -1058,7 +1073,7 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
                 <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{login.prompt.message}</span>
                 {login.prompt.options && login.prompt.options.length > 0 ? (
                   <select value={promptValue} onChange={(event) => setPromptValue(event.target.value)} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
-                    <option value="">请选择</option>
+                    <option value="">{t('login.pleaseSelect')}</option>
                     {login.prompt.options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                   </select>
                 ) : (
@@ -1067,11 +1082,11 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
               </label>
               <button type="submit" disabled={submitting} className="flex h-9 w-full items-center justify-center rounded-md bg-surface-950 text-[13px] font-medium text-white hover:bg-surface-800 disabled:opacity-60 dark:bg-white dark:text-surface-950">
                 {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
-                继续登录
+                {t('login.continue')}
               </button>
             </form>
           )}
-          {login?.status === 'pending' && <div className="flex items-center text-[12px] text-surface-500"><Loader2 size={14} className="mr-2 animate-spin" />正在等待 Pi 完成授权</div>}
+          {login?.status === 'pending' && <div className="flex items-center text-[12px] text-surface-500"><Loader2 size={14} className="mr-2 animate-spin" />{t('login.waiting')}</div>}
           {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
         </div>
       </div>
@@ -1085,6 +1100,7 @@ function CredentialModal({ provider, isOpen, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (state: ManagerState, notice: string) => void;
 }) {
+  const { t } = useI18n();
   const [apiKey, setApiKey] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -1094,17 +1110,17 @@ function CredentialModal({ provider, isOpen, onClose, onSaved }: {
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!apiKey.trim()) {
-      setError('API Key 不能为空。');
+      setError(t('login.needApiKey'));
       return;
     }
     setSubmitting(true);
     setError('');
     try {
       const response = await setProviderCredential(provider.id, apiKey.trim());
-      onSaved(response.state, `${provider.name} 凭据已保存`);
+      onSaved(response.state, t('cred.saved', { name: provider.name }));
       onClose();
     } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : '保存凭据失败。');
+      setError(caughtError instanceof ApiError ? caughtError.message : t('cred.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -1115,10 +1131,10 @@ function CredentialModal({ provider, isOpen, onClose, onSaved }: {
     setError('');
     try {
       const response = await deleteProviderCredential(provider.id);
-      onSaved(response.state, `${provider.name} 凭据已清除`);
+      onSaved(response.state, t('cred.cleared', { name: provider.name }));
       onClose();
     } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : '清除凭据失败。');
+      setError(caughtError instanceof ApiError ? caughtError.message : t('cred.clearFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -1129,33 +1145,33 @@ function CredentialModal({ provider, isOpen, onClose, onSaved }: {
       <div className="w-full max-w-md overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="credential-title">
         <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
           <div>
-            <h2 id="credential-title" className="text-[16px] font-bold text-surface-900 dark:text-white">配置 API Key</h2>
+            <h2 id="credential-title" className="text-[16px] font-bold text-surface-900 dark:text-white">{t('cred.title')}</h2>
             <p className="mt-1 text-[12px] text-surface-500">{provider.name} · {provider.id}</p>
           </div>
-          <button type="button" onClick={onClose} disabled={submitting} title="关闭" aria-label="关闭" className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
+          <button type="button" onClick={onClose} disabled={submitting} title={t('common.close')} aria-label={t('common.close')} className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
         </div>
         <form onSubmit={save}>
           <div className="space-y-4 p-6">
             <div className="rounded-md bg-surface-50 px-3 py-2 text-[12px] text-surface-500 dark:bg-surface-900/50">
-              {provider.credentialConfigured ? '当前已配置 API Key，保存新值会覆盖 Manager 中的密钥。' : '当前尚未配置 API Key。'}
-              {provider.id === 'antigravity' ? ' Antigravity 按本地 OpenAI 兼容桥接入，不在此登录其订阅。' : ''}
+              {provider.credentialConfigured ? t('cred.hasKey') : t('cred.noKey')}
+              {provider.id === 'antigravity' ? t('cred.antigravity') : ''}
             </div>
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">API Key</span>
               <div className="relative">
                 <KeyRound size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
-                <input value={apiKey} onChange={(event) => { setApiKey(event.target.value); setError(''); }} type="password" autoComplete="new-password" autoFocus placeholder="不会在界面回显已有密钥" className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+                <input value={apiKey} onChange={(event) => { setApiKey(event.target.value); setError(''); }} type="password" autoComplete="new-password" autoFocus placeholder={t('cred.noEcho')} className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
               </div>
             </label>
             {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
           </div>
           <div className="flex items-center justify-between gap-3 border-t border-surface-100 bg-surface-50 p-5 dark:border-surface-800 dark:bg-surface-900/50">
-            <button type="button" onClick={() => void clear()} disabled={submitting || !provider.credentialConfigured} className="rounded-md px-4 py-2 text-[13px] font-medium text-red-600 transition-colors hover:text-red-700 disabled:opacity-40 dark:text-red-400">清除凭据</button>
+            <button type="button" onClick={() => void clear()} disabled={submitting || !provider.credentialConfigured} className="rounded-md px-4 py-2 text-[13px] font-medium text-red-600 transition-colors hover:text-red-700 disabled:opacity-40 dark:text-red-400">{t('cred.clear')}</button>
             <div className="flex gap-3">
-              <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 transition-colors hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">取消</button>
+              <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 transition-colors hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">{t('common.cancel')}</button>
               <button type="submit" disabled={submitting} className="flex items-center rounded-md bg-surface-950 px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-surface-800 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-surface-950 dark:hover:bg-surface-200">
                 {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
-                保存凭据
+                {t('cred.save')}
               </button>
             </div>
           </div>
@@ -1170,6 +1186,7 @@ function AddCatalogModelModal({ providers, onClose, onSaved }: {
   onClose: () => void;
   onSaved: (state: ManagerState, notice: string) => void;
 }) {
+  const { t } = useI18n();
   const [providerId, setProviderId] = useState(providers[0]?.id || '');
   const [modelId, setModelId] = useState('');
   const [name, setName] = useState('');
@@ -1180,7 +1197,7 @@ function AddCatalogModelModal({ providers, onClose, onSaved }: {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!providerId || !modelId.trim()) {
-      setError('请选择自定义渠道并填写模型 ID。');
+      setError(t('addModel.needFields'));
       return;
     }
     setSubmitting(true);
@@ -1191,9 +1208,9 @@ function AddCatalogModelModal({ providers, onClose, onSaved }: {
         name: name.trim() || modelId.trim(),
         reasoning,
       });
-      onSaved(response.state, `已添加 ${providerId}/${modelId.trim()}`);
+      onSaved(response.state, t('addModel.added', { ref: `${providerId}/${modelId.trim()}` }));
     } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : '添加模型失败。');
+      setError(caughtError instanceof ApiError ? caughtError.message : t('addModel.failed'));
     } finally {
       setSubmitting(false);
     }
@@ -1204,38 +1221,38 @@ function AddCatalogModelModal({ providers, onClose, onSaved }: {
       <div className="w-full max-w-md overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="add-model-title">
         <div className="flex items-center justify-between border-b border-surface-100 p-5 dark:border-surface-800">
           <div>
-            <h2 id="add-model-title" className="text-[16px] font-bold text-surface-900 dark:text-white">添加模型</h2>
-            <p className="mt-1 text-[12px] text-surface-500">只对自定义 OpenAI 兼容渠道写入完整目录。</p>
+            <h2 id="add-model-title" className="text-[16px] font-bold text-surface-900 dark:text-white">{t('addModel.title')}</h2>
+            <p className="mt-1 text-[12px] text-surface-500">{t('addModel.subtitle')}</p>
           </div>
-          <button type="button" onClick={onClose} disabled={submitting} title="关闭" aria-label="关闭" className="text-surface-400 hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
+          <button type="button" onClick={onClose} disabled={submitting} title={t('common.close')} aria-label={t('common.close')} className="text-surface-400 hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
         </div>
         <form onSubmit={submit}>
           <div className="space-y-4 p-6">
             <label className="block space-y-1.5">
-              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">自定义渠道</span>
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('addModel.channel')}</span>
               <select value={providerId} onChange={(event) => setProviderId(event.target.value)} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
                 {providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.name} · {provider.id}</option>)}
               </select>
             </label>
             <label className="block space-y-1.5">
-              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">模型 ID</span>
-              <input required value={modelId} onChange={(event) => setModelId(event.target.value)} placeholder="例如：gpt-5.6-luna" className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('addModel.modelId')}</span>
+              <input required value={modelId} onChange={(event) => setModelId(event.target.value)} placeholder={t('addModel.idPlaceholder')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
             </label>
             <label className="block space-y-1.5">
-              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">显示名称 <span className="font-normal text-surface-400">可选</span></span>
-              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="默认使用模型 ID" className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+              <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('addModel.displayName')} <span className="font-normal text-surface-400">{t('common.optional')}</span></span>
+              <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('addModel.namePlaceholder')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
             </label>
             <label className="flex items-center gap-2 text-[12px] text-surface-600 dark:text-surface-300">
               <input type="checkbox" checked={reasoning} onChange={(event) => setReasoning(event.target.checked)} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
-              支持 reasoning / Thinking
+              {t('addModel.reasoning')}
             </label>
             {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
           </div>
           <div className="flex justify-end gap-3 border-t border-surface-100 bg-surface-50 p-5 dark:border-surface-800 dark:bg-surface-900/50">
-            <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">取消</button>
+            <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">{t('common.cancel')}</button>
             <button type="submit" disabled={submitting || providers.length === 0} className="flex items-center rounded-md bg-surface-950 px-5 py-2 text-[13px] font-medium text-white hover:bg-surface-800 disabled:opacity-60 dark:bg-white dark:text-surface-950">
               {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
-              添加到完整目录
+              {t('addModel.submit')}
             </button>
           </div>
         </form>
@@ -1247,6 +1264,7 @@ function AddCatalogModelModal({ providers, onClose, onSaved }: {
 type ModelsTab = 'catalog' | 'cycle' | 'default' | 'thinking';
 
 function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateChanged: (nextState: ManagerState, notice: string) => void }) {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<ModelsTab>('catalog');
   const [query, setQuery] = useState('');
   const [selectedProviderId, setSelectedProviderId] = useState(state.active.providerId);
@@ -1303,7 +1321,7 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
 
   const saveDefaultRoute = async () => {
     if (!selectedProvider || !selectedModel || !routeIsValid) {
-      setRouteError('请选择已连接的供应商、可用模型和该模型支持的 Thinking 等级。');
+      setRouteError(t('models.needRoute'));
       return;
     }
     setSavingRoute(true);
@@ -1314,9 +1332,9 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
         modelId: selectedModel.id,
         thinking: selectedThinking,
       });
-      onStateChanged(response.state, '默认模型已保存为候选配置');
+      onStateChanged(response.state, t('models.routeSaved'));
     } catch (caughtError) {
-      setRouteError(caughtError instanceof ApiError ? caughtError.message : '保存默认模型失败。');
+      setRouteError(caughtError instanceof ApiError ? caughtError.message : t('models.routeFailed'));
     } finally {
       setSavingRoute(false);
     }
@@ -1325,15 +1343,15 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">模型资源库</h1>
-        <p className="mt-1 text-[14px] text-surface-500">当前从 Manager 状态读取 {models.length} 个模型。</p>
+        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">{t('models.title')}</h1>
+        <p className="mt-1 text-[14px] text-surface-500">{t('models.subtitle', { count: models.length })}</p>
       </div>
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-surface-200 dark:border-surface-800">
         {[
-          ['catalog', '完整目录'],
-          ['cycle', '循环列表'],
-          ['default', '默认模型'],
-          ['thinking', 'Thinking 映射'],
+          ['catalog', t('models.tabCatalog')],
+          ['cycle', t('models.tabCycle')],
+          ['default', t('models.tabDefault')],
+          ['thinking', t('models.tabThinking')],
         ].map(([value, label]) => (
           <button key={value} type="button" onClick={() => setActiveTab(value as ModelsTab)} className={`pb-2 text-[13px] font-medium ${activeTab === value ? 'border-b-2 border-surface-900 text-surface-900 dark:border-white dark:text-white' : 'text-surface-500 hover:text-surface-900 dark:hover:text-white'}`}>{label}</button>
         ))}
@@ -1344,12 +1362,12 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-100 bg-surface-50/50 p-3 dark:border-surface-800 dark:bg-surface-900/20">
             <div className="relative w-64 max-w-full">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
-              <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索模型 ID" aria-label="搜索模型 ID" className="w-full rounded-md border border-surface-200 bg-white py-1.5 pl-8 pr-3 text-[13px] outline-none focus:border-surface-400 dark:border-surface-700 dark:bg-[#0a0a0a] dark:text-white" />
+              <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('models.searchId')} aria-label={t('models.searchId')} className="w-full rounded-md border border-surface-200 bg-white py-1.5 pl-8 pr-3 text-[13px] outline-none focus:border-surface-400 dark:border-surface-700 dark:bg-[#0a0a0a] dark:text-white" />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[12px] text-surface-500">自定义渠道可增删完整目录；内置渠道只能改映射和 Context</span>
+              <span className="text-[12px] text-surface-500">{t('models.catalogHint')}</span>
               <button type="button" onClick={() => setShowAddModel(true)} disabled={customProviders.length === 0} className="inline-flex h-8 items-center rounded-md border border-surface-200 bg-white px-3 text-[12px] font-medium text-surface-700 hover:bg-surface-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200">
-                <Plus size={13} className="mr-1.5" />添加模型
+                <Plus size={13} className="mr-1.5" />{t('models.add')}
               </button>
             </div>
           </div>
@@ -1357,13 +1375,13 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
             <table className="w-full min-w-[980px] text-left text-[13px]">
               <thead className="bg-surface-50/80 text-[12px] font-medium text-surface-500 dark:bg-surface-900/50 dark:text-surface-400">
                 <tr>
-                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">模型</th>
+                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">{t('models.colModel')}</th>
                   <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">Provider</th>
-                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">输入</th>
+                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">{t('models.colInput')}</th>
                   <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">Thinking</th>
                   <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">Context</th>
-                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">状态</th>
-                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">策略</th>
+                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">{t('models.colStatus')}</th>
+                  <th className="border-b border-surface-100 px-4 py-3 dark:border-surface-800">{t('models.colPolicy')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-100 text-surface-700 dark:divide-surface-800/50 dark:text-surface-300">
@@ -1372,23 +1390,23 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
                     <td className="px-4 py-3"><div className="font-medium text-surface-900 dark:text-white">{model.name}</div><div className="font-mono text-[11px] text-surface-400">{provider.id}/{model.id}</div></td>
                     <td className="px-4 py-3">{provider.name}</td>
                     <td className="px-4 py-3 text-[12px] text-surface-500">{model.input.join(', ')}</td>
-                    <td className="px-4 py-3 text-[12px] text-surface-500">{thinkingSummary(model)}</td>
+                    <td className="px-4 py-3 text-[12px] text-surface-500">{thinkingSummary(model, t)}</td>
                     <td className="px-4 py-3"><ModelContextWindowEditor key={`${provider.id}/${model.id}:${model.contextWindow}`} provider={provider} model={model} onStateChanged={onStateChanged} /></td>
-                    <td className="px-4 py-3">{provider.id === state.active.providerId && model.id === state.active.modelId ? <span className="text-primary-600 dark:text-primary-400">默认</span> : provider.status === 'ready' ? <span className="text-surface-400">可用</span> : <span className="text-amber-600 dark:text-amber-400">{statusMeta(provider.status).label}</span>}</td>
+                    <td className="px-4 py-3">{provider.id === state.active.providerId && model.id === state.active.modelId ? <span className="text-primary-600 dark:text-primary-400">{t('models.default')}</span> : provider.status === 'ready' ? <span className="text-surface-400">{t('common.available')}</span> : <span className="text-amber-600 dark:text-amber-400">{statusMeta(provider.status, t).label}</span>}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <button type="button" onClick={() => { setMappingRef(`${provider.id}/${model.id}`); setActiveTab('thinking'); }} title={`编辑 ${model.name} 的 Thinking 映射`} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium text-surface-600 transition-colors hover:bg-surface-100 hover:text-surface-950 dark:text-surface-400 dark:hover:bg-surface-800 dark:hover:text-white"><Pencil size={13} />映射</button>
+                        <button type="button" onClick={() => { setMappingRef(`${provider.id}/${model.id}`); setActiveTab('thinking'); }} title={t('models.editThinking', { name: model.name })} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium text-surface-600 transition-colors hover:bg-surface-100 hover:text-surface-950 dark:text-surface-400 dark:hover:bg-surface-800 dark:hover:text-white"><Pencil size={13} />{t('models.map')}</button>
                         {isCustomApiProvider(provider) && (
                           <button
                             type="button"
                             onClick={() => {
-                              if (!window.confirm(`确定从完整目录删除 ${provider.id}/${model.id} 吗？`)) return;
+                              if (!window.confirm(t('models.deleteConfirm', { ref: `${provider.id}/${model.id}` }))) return;
                               void deleteProviderModel(provider.id, model.id)
-                                .then((response) => { setCatalogError(''); onStateChanged(response.state, `已删除 ${provider.id}/${model.id}`); })
-                                .catch((caughtError) => setCatalogError(caughtError instanceof ApiError ? caughtError.message : '删除模型失败。'));
+                                .then((response) => { setCatalogError(''); onStateChanged(response.state, t('models.deleted', { ref: `${provider.id}/${model.id}` })); })
+                                .catch((caughtError) => setCatalogError(caughtError instanceof ApiError ? caughtError.message : t('models.deleteFailed')));
                             }}
-                            title={`删除 ${model.name}`}
-                            aria-label={`删除 ${model.name}`}
+                            title={t('models.deleteAria', { name: model.name })}
+                            aria-label={t('models.deleteAria', { name: model.name })}
                             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-surface-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
                           >
                             <Trash2 size={13} />
@@ -1398,7 +1416,7 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
                     </td>
                   </tr>
                 ))}
-                {visibleModels.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-[13px] text-surface-500">没有匹配的模型。</td></tr>}
+                {visibleModels.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-[13px] text-surface-500">{t('models.noMatch')}</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1424,22 +1442,22 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
         <div className="max-w-3xl rounded-xl border border-surface-200 bg-white p-6 dark:border-surface-800 dark:bg-[#0a0a0a]">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-100 text-surface-500 dark:bg-surface-800"><CheckCircle2 size={17} /></div>
-            <div><h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">默认模型</h2><p className="text-[12px] text-surface-500">选择实际使用的 provider、model 和 Thinking 等级</p></div>
+            <div><h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">{t('models.defaultTitle')}</h2><p className="text-[12px] text-surface-500">{t('models.defaultHint')}</p></div>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Provider</span>
               <select value={selectedProviderId} onChange={(event) => handleProviderChange(event.target.value)} disabled={providerOptions.length === 0} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
-                {providerOptions.length === 0 && <option value="">暂无模型来源</option>}
+                {providerOptions.length === 0 && <option value="">{t('models.noSources')}</option>}
                 {providerOptions.map((provider) => (
-                  <option key={provider.id} value={provider.id}>{provider.name}{provider.status === 'ready' ? '' : ` · ${statusMeta(provider.status).label}`}</option>
+                  <option key={provider.id} value={provider.id}>{provider.name}{provider.status === 'ready' ? '' : ` · ${statusMeta(provider.status, t).label}`}</option>
                 ))}
               </select>
             </label>
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">Model</span>
               <select value={selectedModelId} onChange={(event) => handleModelChange(event.target.value)} disabled={!selectedProvider || selectedProvider.models.length === 0} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
-                {!selectedProvider && <option value="">请先选择 Provider</option>}
+                {!selectedProvider && <option value="">{t('models.pickProviderFirst')}</option>}
                 {selectedProvider?.models.map((model) => <option key={model.id} value={model.id}>{model.id}</option>)}
               </select>
             </label>
@@ -1452,20 +1470,20 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
           </div>
           <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-md bg-surface-50 px-4 py-3 text-[12px] dark:bg-surface-900/50">
             <div className="min-w-0">
-              <div className="font-mono text-surface-900 dark:text-white">{selectedProvider && selectedModel ? `${selectedProvider.id}/${selectedModel.id}` : '尚未选择模型'}</div>
+              <div className="font-mono text-surface-900 dark:text-white">{selectedProvider && selectedModel ? `${selectedProvider.id}/${selectedModel.id}` : t('models.notSelected')}</div>
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-surface-500">
-                <span>{selectedProvider ? `认证：${selectedProvider.status === 'ready' ? '已就绪' : statusMeta(selectedProvider.status).label}` : '请选择供应商'}</span>
-                <span>{selectedModel ? `支持：${thinkingLevels.join(' / ')}` : '未读取模型能力'}</span>
+                <span>{selectedProvider ? (selectedProvider.status === 'ready' ? t('models.authReady') : t('models.authStatus', { label: statusMeta(selectedProvider.status, t).label })) : t('models.pickProvider')}</span>
+                <span>{selectedModel ? t('models.supported', { levels: thinkingLevels.join(' / ') }) : t('models.noCaps')}</span>
               </div>
             </div>
             <button type="button" onClick={() => void saveDefaultRoute()} disabled={!routeIsValid || !routeChanged || savingRoute} className="flex h-8 shrink-0 items-center rounded-md bg-primary-600 px-3 text-[12px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">
               {savingRoute && <Loader2 size={13} className="mr-1.5 animate-spin" />}
-              保存为候选配置
+              {t('common.saveCandidate')}
             </button>
           </div>
           <div className="mt-3 flex items-center justify-between text-[11px] text-surface-500">
-            <span>保存后不会立即改变正在运行的 Pi</span>
-            <span>revision {state.configuration.revision} · 已应用 {state.configuration.appliedRevision}</span>
+            <span>{t('models.saveHint')}</span>
+            <span>{t('models.revision', { revision: state.configuration.revision, applied: state.configuration.appliedRevision })}</span>
           </div>
           {routeError && <div className="mt-4 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{routeError}</div>}
         </div>
@@ -1476,18 +1494,18 @@ function ModelsPage({ state, onStateChanged }: { state: ManagerState; onStateCha
           <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <label className="block min-w-[280px] flex-1 space-y-1.5">
-                <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">选择模型</span>
+                <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('models.pickModel')}</span>
                 <select value={effectiveMappingRef} onChange={(event) => { setMappingRef(event.target.value); }} disabled={!mappingModel} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[12px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-white">
                   {models.map(({ provider, model }) => <option key={`${provider.id}/${model.id}`} value={`${provider.id}/${model.id}`}>{provider.id}/{model.id}</option>)}
                 </select>
               </label>
-              {mappingModel && <div className="text-right text-[12px] text-surface-500"><div>有效等级 <span className="font-mono text-surface-900 dark:text-white">{supportedThinkingLevels(mappingModel).length}/7</span></div><div className="mt-1">{mappingModel.thinkingMapVerified ? '已标记为已验证' : '尚未完成真实请求验证'}</div></div>}
+              {mappingModel && <div className="text-right text-[12px] text-surface-500"><div>{t('models.validLevels')} <span className="font-mono text-surface-900 dark:text-white">{supportedThinkingLevels(mappingModel).length}/7</span></div><div className="mt-1">{mappingModel.thinkingMapVerified ? t('models.verified') : t('models.unverified')}</div></div>}
             </div>
           </div>
 
           {mappingModel ? (
             <ThinkingMappingEditor key={mappingEditorKey} provider={mappingProvider} model={mappingModel} onStateChanged={onStateChanged} />
-          ) : <div className="rounded-xl border border-dashed border-surface-300 p-8 text-center text-[13px] text-surface-500 dark:border-surface-800">暂无可编辑的模型。</div>}
+          ) : <div className="rounded-xl border border-dashed border-surface-300 p-8 text-center text-[13px] text-surface-500 dark:border-surface-800">{t('models.noEditable')}</div>}
         </div>
       )}
     </div>
@@ -1503,6 +1521,7 @@ function ModelContextWindowEditor({
   model: ModelDefinition;
   onStateChanged: (nextState: ManagerState, notice: string) => void;
 }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState(String(model.contextWindow));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -1510,7 +1529,7 @@ function ModelContextWindowEditor({
 
   const save = async () => {
     if (!/^\d+$/.test(draft) || Number(draft) < 1 || Number(draft) > 100000000) {
-      setError('请输入 1-100000000 之间的正整数。');
+      setError(t('context.invalid'));
       return;
     }
     setSaving(true);
@@ -1521,9 +1540,9 @@ function ModelContextWindowEditor({
         modelId: model.id,
         contextWindow: Number(draft),
       });
-      onStateChanged(response.state, `${model.name} 的 Context 长度已保存为候选配置`);
+      onStateChanged(response.state, t('context.saved', { name: model.name }));
     } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : '保存 Context 长度失败。');
+      setError(caughtError instanceof ApiError ? caughtError.message : t('context.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -1539,11 +1558,11 @@ function ModelContextWindowEditor({
           step="1"
           value={draft}
           onChange={(event) => { setDraft(event.target.value); setError(''); }}
-          aria-label={`${model.name} Context 长度`}
+          aria-label={t('context.aria', { name: model.name })}
           className="w-[118px] rounded-md border border-surface-200 bg-white px-2 py-1.5 font-mono text-[12px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white"
         />
         <span className="text-[11px] text-surface-400">tokens</span>
-        {changed && <button type="button" onClick={() => void save()} disabled={saving} title="保存 Context 长度" aria-label="保存 Context 长度" className="inline-flex h-7 w-7 items-center justify-center rounded-md text-primary-600 hover:bg-primary-50 disabled:cursor-wait disabled:opacity-50 dark:text-primary-400 dark:hover:bg-primary-500/10"><Save size={13} /></button>}
+        {changed && <button type="button" onClick={() => void save()} disabled={saving} title={t('context.save')} aria-label={t('context.save')} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-primary-600 hover:bg-primary-50 disabled:cursor-wait disabled:opacity-50 dark:text-primary-400 dark:hover:bg-primary-500/10"><Save size={13} /></button>}
       </div>
       {error && <div className="mt-1 max-w-[190px] text-[10px] leading-4 text-red-600 dark:text-red-400">{error}</div>}
     </div>
@@ -1559,6 +1578,7 @@ function ThinkingMappingEditor({
   model: ModelDefinition;
   onStateChanged: (nextState: ManagerState, notice: string) => void;
 }) {
+  const { t } = useI18n();
   const [mappingDraft, setMappingDraft] = useState<ThinkingLevelMap>({ ...model.thinkingLevelMap });
   const [mappingSource, setMappingSource] = useState<ThinkingMapSource>(model.thinkingMapSource);
   const [mappingVerified, setMappingVerified] = useState(model.thinkingMapVerified);
@@ -1604,9 +1624,9 @@ function ThinkingMappingEditor({
         source: mappingSource,
         verified: mappingVerified,
       });
-      onStateChanged(response.state, `${model.name} 的 Thinking 映射已保存为候选配置`);
+      onStateChanged(response.state, t('thinking.saved', { name: model.name }));
     } catch (caughtError) {
-      setMappingError(caughtError instanceof ApiError ? caughtError.message : '保存 Thinking 映射失败。');
+      setMappingError(caughtError instanceof ApiError ? caughtError.message : t('thinking.saveFailed'));
     } finally {
       setSavingMapping(false);
     }
@@ -1616,14 +1636,14 @@ function ThinkingMappingEditor({
     <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
       <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">Pi 等级与上游值</h2><p className="mt-1 text-[12px] text-surface-500">缺省项遵循 Provider 默认；xhigh 和 max 缺省时不启用。</p></div>
+          <div><h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">{t('thinking.title')}</h2><p className="mt-1 text-[12px] text-surface-500">{t('thinking.hint')}</p></div>
           <span className="rounded-md bg-surface-100 px-2 py-1 text-[11px] font-medium text-surface-600 dark:bg-surface-800 dark:text-surface-300">{provider.name}</span>
         </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] text-left text-[13px]">
           <thead className="bg-surface-50/80 text-[12px] font-medium text-surface-500 dark:bg-surface-900/50 dark:text-surface-400">
-            <tr><th className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">Pi 等级</th><th className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">映射方式</th><th className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">上游值</th><th className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">结果</th></tr>
+            <tr><th className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">{t('thinking.colLevel')}</th><th className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">{t('thinking.colMode')}</th><th className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">{t('thinking.colValue')}</th><th className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">{t('thinking.colEffect')}</th></tr>
           </thead>
           <tbody className="divide-y divide-surface-100 dark:divide-surface-800/50">
             {PI_THINKING_LEVELS.map((level) => {
@@ -1633,9 +1653,9 @@ function ThinkingMappingEditor({
               return (
                 <tr key={level}>
                   <td className="px-5 py-3 font-mono text-[12px] font-medium text-surface-900 dark:text-white">{level}</td>
-                  <td className="px-5 py-3"><select value={mode} onChange={(event) => changeMappingMode(level, event.target.value as 'default' | 'value' | 'unsupported')} disabled={isDisabled} aria-label={`${level} 映射方式`} className="rounded-md border border-surface-200 bg-surface-50 px-2.5 py-1.5 text-[12px] text-surface-800 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200"><option value="default">Provider 默认</option><option value="value">指定上游值</option><option value="unsupported">不支持</option></select></td>
-                  <td className="px-5 py-3">{mode === 'value' ? <input value={typeof mappedValue === 'string' ? mappedValue : ''} onChange={(event) => changeMappingValue(level, event.target.value)} aria-label={`${level} 上游值`} placeholder={level === 'off' ? 'none' : level} className="w-48 max-w-full rounded-md border border-surface-200 bg-white px-2.5 py-1.5 font-mono text-[12px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" /> : <span className={`text-[12px] ${mode === 'unsupported' ? 'text-surface-400' : 'text-surface-500'}`}>{mode === 'unsupported' ? '不支持' : level === 'xhigh' || level === 'max' ? '缺省时不启用' : '跟随 Provider 默认'}</span>}</td>
-                  <td className="px-5 py-3 text-[12px]">{mode === 'value' ? <span className="text-emerald-600 dark:text-emerald-400">发送 {mappedValue || '待填写'}</span> : mode === 'unsupported' ? <span className="text-surface-400">隐藏</span> : <span className="text-surface-500">使用默认</span>}</td>
+                  <td className="px-5 py-3"><select value={mode} onChange={(event) => changeMappingMode(level, event.target.value as 'default' | 'value' | 'unsupported')} disabled={isDisabled} aria-label={t('thinking.modeAria', { level })} className="rounded-md border border-surface-200 bg-surface-50 px-2.5 py-1.5 text-[12px] text-surface-800 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200"><option value="default">{t('thinking.modeDefault')}</option><option value="value">{t('thinking.specifyValue')}</option><option value="unsupported">{t('thinking.modeUnsupported')}</option></select></td>
+                  <td className="px-5 py-3">{mode === 'value' ? <input value={typeof mappedValue === 'string' ? mappedValue : ''} onChange={(event) => changeMappingValue(level, event.target.value)} aria-label={t('thinking.valueAria', { level })} placeholder={level === 'off' ? 'none' : level} className="w-48 max-w-full rounded-md border border-surface-200 bg-white px-2.5 py-1.5 font-mono text-[12px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" /> : <span className={`text-[12px] ${mode === 'unsupported' ? 'text-surface-400' : 'text-surface-500'}`}>{mode === 'unsupported' ? t('thinking.modeUnsupported') : level === 'xhigh' || level === 'max' ? t('thinking.disabledDefault') : t('thinking.modeDefault')}</span>}</td>
+                  <td className="px-5 py-3 text-[12px]">{mode === 'value' ? <span className="text-emerald-600 dark:text-emerald-400">{t('thinking.send', { value: mappedValue || t('thinking.pendingValue') })}</span> : mode === 'unsupported' ? <span className="text-surface-400">{t('thinking.hidden')}</span> : <span className="text-surface-500">{t('thinking.useDefault')}</span>}</td>
                 </tr>
               );
             })}
@@ -1644,10 +1664,10 @@ function ThinkingMappingEditor({
       </div>
       <div className="flex flex-wrap items-end justify-between gap-4 border-t border-surface-100 bg-surface-50/50 px-5 py-4 dark:border-surface-800 dark:bg-surface-900/20">
         <div className="flex flex-wrap items-end gap-4">
-          <label className="block space-y-1.5"><span className="text-[11px] font-semibold text-surface-600 dark:text-surface-300">映射来源</span><select value={mappingSource} onChange={(event) => setMappingSource(event.target.value as ThinkingMapSource)} className="block rounded-md border border-surface-200 bg-white px-2.5 py-1.5 text-[12px] text-surface-800 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200">{Object.entries(THINKING_MAP_SOURCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          <label className="flex items-center gap-2 pb-1.5 text-[12px] text-surface-600 dark:text-surface-300"><input type="checkbox" checked={mappingVerified} onChange={(event) => setMappingVerified(event.target.checked)} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />已完成真实请求验证</label>
+          <label className="block space-y-1.5"><span className="text-[11px] font-semibold text-surface-600 dark:text-surface-300">{t('thinking.source')}</span><select value={mappingSource} onChange={(event) => setMappingSource(event.target.value as ThinkingMapSource)} className="block rounded-md border border-surface-200 bg-white px-2.5 py-1.5 text-[12px] text-surface-800 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200">{(['provider-default', 'provider-docs', 'request-probe', 'user'] as ThinkingMapSource[]).map((value) => <option key={value} value={value}>{thinkingSourceLabel(value, t)}</option>)}</select></label>
+          <label className="flex items-center gap-2 pb-1.5 text-[12px] text-surface-600 dark:text-surface-300"><input type="checkbox" checked={mappingVerified} onChange={(event) => setMappingVerified(event.target.checked)} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />{t('thinking.verifiedCheckbox')}</label>
         </div>
-        <button type="button" onClick={() => void saveThinkingMap()} disabled={!mappingChanged || savingMapping} className="inline-flex h-8 shrink-0 items-center rounded-md bg-primary-600 px-3 text-[12px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">{savingMapping ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Save size={13} className="mr-1.5" />}保存为候选配置</button>
+        <button type="button" onClick={() => void saveThinkingMap()} disabled={!mappingChanged || savingMapping} className="inline-flex h-8 shrink-0 items-center rounded-md bg-primary-600 px-3 text-[12px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">{savingMapping ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Save size={13} className="mr-1.5" />}{t('common.saveCandidate')}</button>
       </div>
       {mappingError && <div className="mx-5 mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{mappingError}</div>}
     </div>
@@ -1661,6 +1681,7 @@ function CycleListEditor({
   state: ManagerState;
   onStateChanged: (nextState: ManagerState, notice: string) => void;
 }) {
+  const { t } = useI18n();
   const [draftRefs, setDraftRefs] = useState<string[]>(() => [...state.cycle.modelRefs]);
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
@@ -1704,16 +1725,16 @@ function CycleListEditor({
   };
 
   const saveCycleList = async () => {
-    if (draftRefs.length === 0 && !window.confirm('循环列表为空时，Pi 会回到自己的默认行为。仍然要保存吗？')) {
+    if (draftRefs.length === 0 && !window.confirm(t('cycle.emptyConfirm'))) {
       return;
     }
     setSaving(true);
     setError('');
     try {
       const response = await updateCycleList({ modelRefs: draftRefs });
-      onStateChanged(response.state, '循环列表已保存为候选配置');
+      onStateChanged(response.state, t('cycle.saved'));
     } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : '保存循环列表失败。');
+      setError(caughtError instanceof ApiError ? caughtError.message : t('cycle.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -1725,13 +1746,13 @@ function CycleListEditor({
         <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">已加入循环</h2>
-              <p className="mt-1 text-[12px] text-surface-500">顺序就是写入顺序。空列表会让 Pi 回到默认行为。</p>
+              <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">{t('cycle.joined')}</h2>
+              <p className="mt-1 text-[12px] text-surface-500">{t('cycle.orderHint')}</p>
             </div>
             <div className="flex flex-wrap gap-2 text-[11px]">
-              <span className="rounded-full bg-surface-100 px-2.5 py-1 text-surface-600 dark:bg-surface-800 dark:text-surface-300">{draftRefs.length} 项</span>
-              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">{draftEntries.filter((entry) => entry.valid).length} 可用</span>
-              {invalidEntries.length > 0 && <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">{invalidEntries.length} 失效</span>}
+              <span className="rounded-full bg-surface-100 px-2.5 py-1 text-surface-600 dark:bg-surface-800 dark:text-surface-300">{t('cycle.items', { count: draftRefs.length })}</span>
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">{t('cycle.availableCount', { count: draftEntries.filter((entry) => entry.valid).length })}</span>
+              {invalidEntries.length > 0 && <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">{t('cycle.invalidCount', { count: invalidEntries.length })}</span>}
             </div>
           </div>
         </div>
@@ -1741,11 +1762,11 @@ function CycleListEditor({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-surface-100 text-[11px] font-medium text-surface-600 dark:bg-surface-800 dark:text-surface-300">{index + 1}</span>
-                  <span className="font-mono text-[12px] font-medium text-surface-900 dark:text-white">{cycleEntryLabel(entry)}</span>
+                  <span className="font-mono text-[12px] font-medium text-surface-900 dark:text-white">{cycleEntryLabel(entry, t)}</span>
                   {entry.valid ? (
-                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">可用</span>
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">{t('common.available')}</span>
                   ) : (
-                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">失效 · {entry.reason}</span>
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">{t('cycle.invalidReason', { reason: entry.reason })}</span>
                   )}
                 </div>
                 <div className="mt-1 text-[12px] text-surface-500">
@@ -1753,34 +1774,34 @@ function CycleListEditor({
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
-                <button type="button" onClick={() => moveModel(index, -1)} disabled={index === 0} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-surface-200 text-surface-500 hover:bg-surface-50 hover:text-surface-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white" aria-label="上移"><ArrowUp size={14} /></button>
-                <button type="button" onClick={() => moveModel(index, 1)} disabled={index === draftEntries.length - 1} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-surface-200 text-surface-500 hover:bg-surface-50 hover:text-surface-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white" aria-label="下移"><ArrowDown size={14} /></button>
-                <button type="button" onClick={() => removeModel(index)} className="inline-flex h-8 items-center rounded-md border border-surface-200 px-3 text-[12px] font-medium text-surface-500 hover:bg-surface-50 hover:text-surface-900 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white"><Trash2 size={13} className="mr-1.5" />移除</button>
+                <button type="button" onClick={() => moveModel(index, -1)} disabled={index === 0} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-surface-200 text-surface-500 hover:bg-surface-50 hover:text-surface-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white" aria-label={t('cycle.moveUp')}><ArrowUp size={14} /></button>
+                <button type="button" onClick={() => moveModel(index, 1)} disabled={index === draftEntries.length - 1} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-surface-200 text-surface-500 hover:bg-surface-50 hover:text-surface-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white" aria-label={t('cycle.moveDown')}><ArrowDown size={14} /></button>
+                <button type="button" onClick={() => removeModel(index)} className="inline-flex h-8 items-center rounded-md border border-surface-200 px-3 text-[12px] font-medium text-surface-500 hover:bg-surface-50 hover:text-surface-900 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white"><Trash2 size={13} className="mr-1.5" />{t('common.remove')}</button>
               </div>
             </div>
           )) : (
             <div className="px-5 py-10 text-center text-[13px] text-surface-500">
-              当前没有任何循环项。保存后 Pi 会使用默认行为。
+              {t('cycle.emptyList')}
             </div>
           )}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-surface-100 bg-surface-50/50 px-5 py-4 dark:border-surface-800 dark:bg-surface-900/20">
           <div className="text-[12px] text-surface-500">
-            {invalidEntries.length > 0 ? `有 ${invalidEntries.length} 个失效引用，应用时会被拦住。` : '所有引用当前都可用。'}
+            {invalidEntries.length > 0 ? t('cycle.blocked', { count: invalidEntries.length }) : t('cycle.allValid')}
           </div>
-          <button type="button" onClick={() => void saveCycleList()} disabled={!changed || saving} className="inline-flex h-8 items-center rounded-md bg-primary-600 px-3 text-[12px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">{saving ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Save size={13} className="mr-1.5" />}保存为候选配置</button>
+          <button type="button" onClick={() => void saveCycleList()} disabled={!changed || saving} className="inline-flex h-8 items-center rounded-md bg-primary-600 px-3 text-[12px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">{saving ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Save size={13} className="mr-1.5" />}{t('common.saveCandidate')}</button>
         </div>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
         <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
-          <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">可加入模型</h2>
-          <p className="mt-1 text-[12px] text-surface-500">从完整目录里挑选已就绪模型，加入后会追加到列表末尾。</p>
+          <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">{t('cycle.availableTitle')}</h2>
+          <p className="mt-1 text-[12px] text-surface-500">{t('cycle.availableHint')}</p>
         </div>
         <div className="border-b border-surface-100 px-5 py-3 dark:border-surface-800">
           <div className="relative">
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索 provider 或模型" className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('cycle.search')} className="w-full rounded-md border border-surface-200 bg-surface-50 py-2 pl-8 pr-3 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-900 dark:text-white" />
           </div>
         </div>
         <div className="max-h-[520px] divide-y divide-surface-100 overflow-y-auto dark:divide-surface-800/50">
@@ -1788,13 +1809,13 @@ function CycleListEditor({
             <div key={ref} className="flex items-center justify-between gap-3 px-5 py-4">
               <div className="min-w-0">
                 <div className="font-mono text-[12px] font-medium text-surface-900 dark:text-white">{ref}</div>
-                <div className="mt-1 text-[12px] text-surface-500">{provider.name} · {model.name} · {statusMeta(provider.status).label}</div>
+                <div className="mt-1 text-[12px] text-surface-500">{provider.name} · {model.name} · {statusMeta(provider.status, t).label}</div>
               </div>
-              <button type="button" onClick={() => addModel(ref)} className="inline-flex h-8 items-center rounded-md border border-surface-200 px-3 text-[12px] font-medium text-surface-600 hover:bg-surface-50 hover:text-surface-900 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-800 dark:hover:text-white"><Plus size={13} className="mr-1.5" />加入</button>
+              <button type="button" onClick={() => addModel(ref)} className="inline-flex h-8 items-center rounded-md border border-surface-200 px-3 text-[12px] font-medium text-surface-600 hover:bg-surface-50 hover:text-surface-900 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-800 dark:hover:text-white"><Plus size={13} className="mr-1.5" />{t('common.add')}</button>
             </div>
           )) : (
             <div className="px-5 py-10 text-center text-[13px] text-surface-500">
-              没有匹配的可加入模型。
+              {t('cycle.noAddable')}
             </div>
           )}
         </div>
@@ -1805,6 +1826,7 @@ function CycleListEditor({
 }
 
 function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateChanged: (nextState: ManagerState, notice: string) => void }) {
+  const { t } = useI18n();
   const [importingLive, setImportingLive] = useState(false);
   const [rollingLive, setRollingLive] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -1812,29 +1834,29 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
   const currentActiveProvider = state.providers.find((provider) => provider.id === state.active.providerId);
   const cycleRefs = (state.cycle.modelRefs || []).filter(Boolean);
   const cycleSummary = cycleRefs.length === 0
-    ? { text: '空', title: '空' }
-    : { text: `${cycleRefs.length} 项 · ${cycleRefs[0]}${cycleRefs.length > 1 ? ' 等' : ''}`, title: cycleRefs.join(' / ') };
+    ? { text: t('cycle.empty'), title: t('cycle.empty') }
+    : { text: t(cycleRefs.length > 1 ? 'cycle.summaryMore' : 'cycle.summaryOne', { count: cycleRefs.length, first: cycleRefs[0] }), title: cycleRefs.join(' / ') };
   const liveVerify = state.runtime.lastLiveVerify;
   const statusRows = [
-    { label: '目标项目', value: state.targetProject },
-    { label: '默认模型', value: `${state.active.providerId}/${state.active.modelId}` },
+    { label: t('live.target'), value: state.targetProject },
+    { label: t('live.defaultModel'), value: `${state.active.providerId}/${state.active.modelId}` },
     { label: 'Thinking', value: state.active.thinking },
-    { label: '凭据', value: currentActiveProvider ? `${currentActiveProvider.name} · ${currentActiveProvider.credentialConfigured ? '已配置' : '未配置'}` : '未选择' },
-    { label: '循环列表', value: cycleSummary.text, title: cycleSummary.title },
-    { label: '上次导入', value: state.runtime.lastLiveImportAt || '尚未导入' },
-    { label: '本机验证', value: liveVerify ? (liveVerify.ok ? '通过' : '未完全通过') : '尚未验证', title: liveVerify?.error || '' },
+    { label: t('live.credential'), value: currentActiveProvider ? `${currentActiveProvider.name} · ${currentActiveProvider.credentialConfigured ? t('live.configured') : t('live.unconfigured')}` : t('live.unselected') },
+    { label: t('live.cycle'), value: cycleSummary.text, title: cycleSummary.title },
+    { label: t('live.lastImport'), value: state.runtime.lastLiveImportAt || t('live.neverImported') },
+    { label: t('live.verify'), value: liveVerify ? (liveVerify.ok ? t('card.testPass') : t('live.verifyPartial')) : t('live.neverVerified'), title: liveVerify?.error || '' },
   ];
 
   const importLiveNow = async () => {
-    if (!window.confirm('将备份并写入本机 ~/.pi/agent 的 settings.json / models.json / auth.json。继续？')) return;
+    if (!window.confirm(t('live.confirm'))) return;
     setImportingLive(true);
     setActionError('');
     try {
       const response = await importLivePi();
       const verify = response.state.runtime.lastLiveVerify;
-      onStateChanged(response.state, verify?.ok ? '已导入本机 Pi，可用 pi --list-models 验证' : `已写入本机 Pi，但验证未完全通过：${verify?.error || '未知原因'}`);
+      onStateChanged(response.state, verify?.ok ? t('live.importedOk') : t('live.importedPartial', { error: verify?.error || t('live.unknownError') }));
     } catch (caughtError) {
-      setActionError(caughtError instanceof ApiError ? caughtError.message : '导入本机 Pi 失败。');
+      setActionError(caughtError instanceof ApiError ? caughtError.message : t('live.importFailed'));
     } finally {
       setImportingLive(false);
     }
@@ -1842,16 +1864,16 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
 
   const rollbackLiveNow = async () => {
     if (!state.runtime.lastLiveBackupDir) {
-      setActionError('没有可回滚的本机 Pi 备份。');
+      setActionError(t('live.noBackup'));
       return;
     }
     setRollingLive(true);
     setActionError('');
     try {
       const response = await rollbackLivePi();
-      onStateChanged(response.state, '已回滚本机 Pi 配置');
+      onStateChanged(response.state, t('live.rolledBack'));
     } catch (caughtError) {
-      setActionError(caughtError instanceof ApiError ? caughtError.message : '回滚本机 Pi 失败。');
+      setActionError(caughtError instanceof ApiError ? caughtError.message : t('live.rollbackFailed'));
     } finally {
       setRollingLive(false);
     }
@@ -1860,14 +1882,14 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">导入本机 Pi</h1>
-        <p className="mt-1 text-[14px] text-surface-500">把候选配置备份后写入 ~/.pi/agent。导完退出当前 Pi 再进，/reload 不会重读模型。</p>
+        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">{t('live.title')}</h1>
+        <p className="mt-1 text-[14px] text-surface-500">{t('live.subtitle')}</p>
       </div>
 
       <div className="max-w-3xl overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
         <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
-          <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">候选配置</h2>
-          <p className="mt-1 text-[12px] text-surface-500">写入 ~/.pi/agent/settings.json、models.json、auth.json。</p>
+          <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">{t('live.candidate')}</h2>
+          <p className="mt-1 text-[12px] text-surface-500">{t('live.candidateHint')}</p>
         </div>
         <div className="overflow-x-auto p-5">
           <table className="w-full text-left text-[12px]">
@@ -1884,11 +1906,11 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
         <div className="flex flex-wrap gap-2 border-t border-surface-100 bg-surface-50/50 px-5 py-4 dark:border-surface-800 dark:bg-surface-900/20">
           <button type="button" onClick={() => void importLiveNow()} disabled={importingLive} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md bg-primary-600 px-3 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-wait disabled:opacity-60">
             {importingLive ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Download size={14} className="mr-2" />}
-            导入本机 Pi
+            {t('live.import')}
           </button>
           <button type="button" onClick={() => void rollbackLiveNow()} disabled={rollingLive || !state.runtime.lastLiveBackupDir} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-surface-200 px-3 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
             {rollingLive ? <Loader2 size={14} className="mr-2 animate-spin" /> : <RotateCcw size={14} className="mr-2" />}
-            回滚本机 Pi
+            {t('live.rollback')}
           </button>
         </div>
         {actionError && <div className="mx-5 mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{actionError}</div>}
@@ -1898,44 +1920,45 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
 }
 
 function DiagnosticsPage({ state }: { state: ManagerState }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">系统诊断</h1>
-        <p className="mt-1 text-[14px] text-surface-500">Pi 与 Manager 的当前运行信息。</p>
+        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">{t('diag.title')}</h1>
+        <p className="mt-1 text-[14px] text-surface-500">{t('diag.subtitle')}</p>
       </div>
       <div className="grid max-w-5xl gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
-          <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Activity size={15} /> Pi 环境</div>
+          <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Activity size={15} /> {t('diag.piEnv')}</div>
           <dl className="space-y-2 text-[12px]">
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">安装状态</dt><dd>{state.pi.installed ? '已安装' : '未检测到'}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">版本</dt><dd className="font-mono">{state.pi.version || '未检测'}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">可执行文件</dt><dd className="max-w-[180px] truncate font-mono" title={state.pi.path}>{state.pi.path}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">订阅授权</dt><dd>{state.pi.subscriptionReady ? '已就绪' : '未就绪'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.install')}</dt><dd>{state.pi.installed ? t('diag.installed') : t('diag.notFound')}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.version')}</dt><dd className="font-mono">{state.pi.version || t('diag.notDetected')}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.executable')}</dt><dd className="max-w-[180px] truncate font-mono" title={state.pi.path}>{state.pi.path}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.subscription')}</dt><dd>{state.pi.subscriptionReady ? t('status.ready') : t('diag.notReady')}</dd></div>
           </dl>
         </div>
         <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
           <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Server size={15} /> Gateway</div>
           <dl className="space-y-2 text-[12px]">
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">状态</dt><dd>{state.gateway.running ? '运行中' : '已停止'}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">地址</dt><dd className="font-mono">{state.gateway.host}:{state.gateway.port}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">请求数</dt><dd className="font-mono">{state.gateway.stats.requests}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">最近错误</dt><dd className="max-w-[220px] truncate text-right">{state.gateway.stats.lastError || '无'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.status')}</dt><dd>{state.gateway.running ? t('diag.running') : t('diag.stopped')}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.address')}</dt><dd className="font-mono">{state.gateway.host}:{state.gateway.port}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.requests')}</dt><dd className="font-mono">{state.gateway.stats.requests}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.lastError')}</dt><dd className="max-w-[220px] truncate text-right">{state.gateway.stats.lastError || t('diag.none')}</dd></div>
           </dl>
         </div>
       </div>
       <div className="grid max-w-5xl gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
-          <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><CheckCircle2 size={15} /> 配置状态</div>
+          <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><CheckCircle2 size={15} /> {t('diag.config')}</div>
           <dl className="space-y-2 text-[12px]">
             <div className="flex justify-between gap-4"><dt className="text-surface-500">revision</dt><dd className="font-mono">{state.configuration.revision}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">本机导入</dt><dd className="max-w-[220px] truncate font-mono" title={state.runtime.lastLiveImportAt || ''}>{state.runtime.lastLiveImportAt || '尚未导入'}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">本机验证</dt><dd>{state.runtime.lastLiveVerify ? (state.runtime.lastLiveVerify.ok ? '通过' : '未完全通过') : '尚未验证'}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">备份目录</dt><dd className="max-w-[220px] truncate font-mono" title={state.runtime.lastLiveBackupDir}>{state.runtime.lastLiveBackupDir || '无'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.liveImport')}</dt><dd className="max-w-[220px] truncate font-mono" title={state.runtime.lastLiveImportAt || ''}>{state.runtime.lastLiveImportAt || t('live.neverImported')}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.liveVerify')}</dt><dd>{state.runtime.lastLiveVerify ? (state.runtime.lastLiveVerify.ok ? t('card.testPass') : t('live.verifyPartial')) : t('live.neverVerified')}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">{t('diag.backup')}</dt><dd className="max-w-[220px] truncate font-mono" title={state.runtime.lastLiveBackupDir}>{state.runtime.lastLiveBackupDir || t('diag.none')}</dd></div>
           </dl>
         </div>
         <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
-          <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Activity size={15} /> 最近事件</div>
+          <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><Activity size={15} /> {t('diag.events')}</div>
           <div className="space-y-3">
             {(state.events.length > 0 ? state.events.slice(0, 6) : []).map((event) => (
               <div key={event.id} className="rounded-md border border-surface-200 px-3 py-2 text-[12px] dark:border-surface-800">
@@ -1946,7 +1969,7 @@ function DiagnosticsPage({ state }: { state: ManagerState }) {
                 {event.detail && <div className="mt-1 max-w-[420px] truncate text-surface-500">{event.detail}</div>}
               </div>
             ))}
-            {state.events.length === 0 && <div className="rounded-md border border-dashed border-surface-200 px-3 py-6 text-center text-[12px] text-surface-500 dark:border-surface-800">暂无事件。</div>}
+            {state.events.length === 0 && <div className="rounded-md border border-dashed border-surface-200 px-3 py-6 text-center text-[12px] text-surface-500 dark:border-surface-800">{t('diag.noEvents')}</div>}
           </div>
         </div>
       </div>
@@ -1956,6 +1979,7 @@ function DiagnosticsPage({ state }: { state: ManagerState }) {
 }
 
 function App() {
+  const { t } = useI18n();
   const [activeNav, setActiveNav] = useState<NavId>('providers');
   const [state, setState] = useState<ManagerState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1978,7 +2002,7 @@ function App() {
         }
       })
       .catch((caughtError) => {
-        if (!cancelled) setError(caughtError instanceof ApiError ? caughtError.message : '无法连接 Pi Manager API。');
+        if (!cancelled) setError(caughtError instanceof ApiError ? caughtError.message : t('app.connectFailed'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -1986,7 +2010,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const refreshState = async () => {
     setRefreshing(true);
@@ -1994,39 +2018,39 @@ function App() {
       const nextState = await getState(true);
       setState(nextState);
       setError('');
-      setNotice('状态已刷新');
+      setNotice(t('app.refreshed'));
     } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : '刷新失败，请确认 Manager 服务仍在运行。');
+      setError(caughtError instanceof ApiError ? caughtError.message : t('app.refreshFailed'));
     } finally {
       setRefreshing(false);
     }
   };
 
   const handleDeleteProvider = async (provider: ProviderState) => {
-    if (!window.confirm(`确定删除供应商“${provider.name}”吗？`)) return;
+    if (!window.confirm(t('app.deleteConfirm', { name: provider.name }))) return;
     try {
       const response = await deleteProvider(provider.id);
       setState(response.state);
-      setNotice(`已删除 ${provider.name}`);
+      setNotice(t('app.deleted', { name: provider.name }));
       setConnectionTests((current) => {
         const next = { ...current };
         delete next[provider.id];
         return next;
       });
     } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : '删除供应商失败。');
+      setError(caughtError instanceof ApiError ? caughtError.message : t('app.deleteFailed'));
     }
   };
 
   const handleLogoutProvider = async (provider: ProviderState) => {
-    if (!window.confirm(`确定退出“${provider.name}”的 Pi 原生登录吗？`)) return;
+    if (!window.confirm(t('app.logoutConfirm', { name: provider.name }))) return;
     try {
       const response = await logoutNativeProvider(provider.id);
       setState(response.state);
-      setNotice(`已退出 ${provider.name}`);
+      setNotice(t('app.loggedOut', { name: provider.name }));
       setError('');
     } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : '退出登录失败。');
+      setError(caughtError instanceof ApiError ? caughtError.message : t('app.logoutFailed'));
     }
   };
 
@@ -2035,18 +2059,18 @@ function App() {
       const response = await testProviderConnection(provider.id);
       setState(response.state);
       setConnectionTests((current) => ({ ...current, [provider.id]: response.result }));
-      setNotice(`${provider.name} 连接测试：${response.result.message}`);
+      setNotice(t('app.testNotice', { name: provider.name, message: response.result.message }));
     } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : '连接测试失败。');
+      setError(caughtError instanceof ApiError ? caughtError.message : t('app.testFailed'));
     }
   };
 
   if (loading) {
-    return <div className="flex h-screen items-center justify-center bg-surface-50 text-[13px] text-surface-500 dark:bg-surface-950"><Loader2 size={17} className="mr-2 animate-spin" />正在读取 Pi Manager 状态</div>;
+    return <div className="flex h-screen items-center justify-center bg-surface-50 text-[13px] text-surface-500 dark:bg-surface-950"><Loader2 size={17} className="mr-2 animate-spin" />{t('app.loading')}</div>;
   }
 
   if (!state) {
-    return <div className="flex h-screen flex-col items-center justify-center bg-surface-50 px-6 text-center dark:bg-surface-950"><CircleAlert size={24} className="mb-3 text-red-500" /><h1 className="text-[16px] font-semibold text-surface-900 dark:text-white">无法连接 Manager API</h1><p className="mt-1 max-w-sm text-[13px] text-surface-500">{error || '请先启动 Pi Manager 服务。'}</p><button type="button" onClick={() => window.location.reload()} className="mt-5 rounded-md bg-surface-950 px-4 py-2 text-[13px] font-medium text-white dark:bg-white dark:text-surface-950">重新连接</button></div>;
+    return <div className="flex h-screen flex-col items-center justify-center bg-surface-50 px-6 text-center dark:bg-surface-950"><CircleAlert size={24} className="mb-3 text-red-500" /><h1 className="text-[16px] font-semibold text-surface-900 dark:text-white">{t('app.cannotConnect')}</h1><p className="mt-1 max-w-sm text-[13px] text-surface-500">{error || t('app.startFirst')}</p><button type="button" onClick={() => window.location.reload()} className="mt-5 rounded-md bg-surface-950 px-4 py-2 text-[13px] font-medium text-white dark:bg-white dark:text-surface-950">{t('app.reconnect')}</button></div>;
   }
 
   return (

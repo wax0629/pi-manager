@@ -4,7 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const HELP = `Pi Manager — 本地控制面
+const CLI_MESSAGES = {
+  zh: {
+    help: `Pi Manager — 本地控制面
 
 用法:
   pi-manager [选项]
@@ -16,9 +18,65 @@ const HELP = `Pi Manager — 本地控制面
   -h, --help      显示帮助
 
 缺 web/dist 时先运行: npm --prefix web run build
-`;
+`,
+    unknownArg: "未知参数: {token}",
+    needValue: "{flag} 需要一个值",
+    invalidPort: "无效端口: {value}",
+    missingDist: "缺少 web/dist/index.html。先运行: npm --prefix web run build",
+    alreadyRunning: "Pi Manager 已在运行: {url}",
+    startFailed: "Pi Manager 启动失败: {error}",
+    cannotOpen: "无法打开浏览器: {error}",
+    openManual: "请手动打开 {url}"
+  },
+  en: {
+    help: `Pi Manager — local control plane
 
-export function parseCliArgs(argv) {
+Usage:
+  pi-manager [options]
+
+Options:
+  --host <address>  listen address (default 127.0.0.1, or PI_MANAGER_HOST)
+  --port <port>     listen port (default 8670, or PI_MANAGER_PORT)
+  --no-open         do not open a browser
+  -h, --help        show help
+
+If web/dist is missing, run: npm --prefix web run build
+`,
+    unknownArg: "Unknown argument: {token}",
+    needValue: "{flag} requires a value",
+    invalidPort: "Invalid port: {value}",
+    missingDist: "Missing web/dist/index.html. Run: npm --prefix web run build",
+    alreadyRunning: "Pi Manager is already running at {url}",
+    startFailed: "Pi Manager failed to start: {error}",
+    cannotOpen: "Could not open the browser: {error}",
+    openManual: "Open {url} manually"
+  }
+};
+
+export function cliLocale(env = process.env) {
+  const explicit = String(env.PI_MANAGER_LANG || "").trim().toLowerCase();
+  if (explicit === "zh" || explicit.startsWith("zh")) return "zh";
+  if (explicit === "en" || explicit.startsWith("en")) return "en";
+  const lang = String(env.LANG || env.LC_ALL || env.LC_MESSAGES || "").toLowerCase();
+  return lang.startsWith("zh") ? "zh" : "en";
+}
+
+function formatCliMessage(template, params) {
+  if (!params) return template;
+  return template.replace(/\{(\w+)\}/g, (match, name) => (
+    Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match
+  ));
+}
+
+export function cliMessage(key, params, env = process.env) {
+  const locale = cliLocale(env);
+  const table = CLI_MESSAGES[locale] || CLI_MESSAGES.en;
+  return formatCliMessage(table[key] || CLI_MESSAGES.en[key] || key, params);
+}
+
+const HELP = CLI_MESSAGES.en.help;
+
+export function parseCliArgs(argv, env = process.env) {
   const args = { host: undefined, port: undefined, open: true, help: false };
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
@@ -31,7 +89,7 @@ export function parseCliArgs(argv) {
       continue;
     }
     if (token === "--host") {
-      args.host = requireValue(argv, ++i, "--host");
+      args.host = requireValue(argv, ++i, "--host", env);
       continue;
     }
     if (token.startsWith("--host=")) {
@@ -39,28 +97,28 @@ export function parseCliArgs(argv) {
       continue;
     }
     if (token === "--port" || token === "-p") {
-      args.port = parsePort(requireValue(argv, ++i, token));
+      args.port = parsePort(requireValue(argv, ++i, token, env), env);
       continue;
     }
     if (token.startsWith("--port=")) {
-      args.port = parsePort(token.slice("--port=".length));
+      args.port = parsePort(token.slice("--port=".length), env);
       continue;
     }
-    throw new Error(`未知参数: ${token}`);
+    throw new Error(cliMessage("unknownArg", { token }, env));
   }
   return args;
 }
 
-function requireValue(argv, index, flag) {
+function requireValue(argv, index, flag, env = process.env) {
   const value = argv[index];
-  if (!value || value.startsWith("-")) throw new Error(`${flag} 需要一个值`);
+  if (!value || value.startsWith("-")) throw new Error(cliMessage("needValue", { flag }, env));
   return value;
 }
 
-function parsePort(value) {
+function parsePort(value, env = process.env) {
   const port = Number(value);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`无效端口: ${value}`);
+    throw new Error(cliMessage("invalidPort", { value }, env));
   }
   return port;
 }
@@ -97,7 +155,7 @@ async function main(argv = process.argv.slice(2)) {
     return 1;
   }
   if (args.help) {
-    process.stdout.write(HELP);
+    process.stdout.write(cliMessage("help"));
     return 0;
   }
   if (args.host) process.env.PI_MANAGER_HOST = args.host;
@@ -105,7 +163,7 @@ async function main(argv = process.argv.slice(2)) {
 
   const { startManagerServer, publicDir, store } = await import("./server.mjs");
   if (!hasWebUi(publicDir)) {
-    console.error("缺少 web/dist/index.html。先运行: npm --prefix web run build");
+    console.error(cliMessage("missingDist"));
     process.exitCode = 1;
     return 1;
   }
@@ -122,9 +180,9 @@ async function main(argv = process.argv.slice(2)) {
     console.log(`Pi gateway: http://${gateway.host}:${gateway.port}/v1`);
   } catch (error) {
     if (error && error.code === "EADDRINUSE") {
-      console.log(`Pi Manager 已在运行: ${url}`);
+      console.log(cliMessage("alreadyRunning", { url }));
     } else {
-      console.error(`Pi Manager 启动失败: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(cliMessage("startFailed", { error: error instanceof Error ? error.message : String(error) }));
       process.exitCode = 1;
       return 1;
     }
@@ -134,8 +192,8 @@ async function main(argv = process.argv.slice(2)) {
     try {
       await openBrowser(url);
     } catch (error) {
-      console.error(`无法打开浏览器: ${error instanceof Error ? error.message : String(error)}`);
-      console.error(`请手动打开 ${url}`);
+      console.error(cliMessage("cannotOpen", { error: error instanceof Error ? error.message : String(error) }));
+      console.error(cliMessage("openManual", { url }));
     }
   }
 
@@ -160,4 +218,4 @@ if (isCliEntrypoint()) {
   });
 }
 
-export { main, HELP };
+export { main, HELP, CLI_MESSAGES };

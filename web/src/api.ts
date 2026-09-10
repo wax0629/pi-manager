@@ -40,11 +40,17 @@ async function request<T>(pathname: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     const message = typeof payload === 'object' && payload !== null && 'error' in payload
       ? String(payload.error)
-      : `请求失败（${response.status}）`;
+      : requestFailedMessage(response.status);
     throw new ApiError(message, response.status);
   }
 
   return payload as T;
+}
+
+function requestFailedMessage(status: number) {
+  const lang = typeof document !== 'undefined' ? document.documentElement.lang : '';
+  if (lang.toLowerCase().startsWith('zh')) return `请求失败（${status}）`;
+  return `Request failed (${status})`;
 }
 
 export async function getState(forceRefresh = false): Promise<ManagerState> {
