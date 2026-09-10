@@ -7,12 +7,10 @@ import {
   CheckCircle2,
   CircleAlert,
   Download,
-  ExternalLink,
   KeyRound,
   LayoutDashboard,
   Loader2,
   Pencil,
-  Play,
   Plus,
   RefreshCw,
   Save,
@@ -26,7 +24,6 @@ import {
 } from 'lucide-react';
 import {
   ApiError,
-  applyProfile,
   addProviderModel,
   createProvider,
   discoverProviderModels,
@@ -38,8 +35,6 @@ import {
   deleteProviderCredential,
   getState,
   setProviderCredential,
-  launchPi,
-  rollbackProfile,
   rollbackLivePi,
   importLivePi,
   startNativeLogin,
@@ -48,7 +43,6 @@ import {
   logoutNativeProvider,
   testProviderConnection,
   type NativeLoginState,
-  stopPi,
   updateCycleList,
   updateModelContextWindow,
   routeProvider,
@@ -171,7 +165,7 @@ function Sidebar({ activeNav, onNavigate, piInstalled }: { activeNav: NavId; onN
   const workspaceItems: Array<{ id: NavId; label: string; icon: ReactNode }> = [
     { id: 'providers', label: '供应商与账号', icon: <Server size={16} strokeWidth={2.3} /> },
     { id: 'models', label: '模型资源库', icon: <Boxes size={16} strokeWidth={2.3} /> },
-    { id: 'profiles', label: '环境 Profiles', icon: <SlidersHorizontal size={16} strokeWidth={2.3} /> },
+    { id: 'profiles', label: '导入本机 Pi', icon: <SlidersHorizontal size={16} strokeWidth={2.3} /> },
   ];
 
   return (
@@ -233,8 +227,7 @@ function Sidebar({ activeNav, onNavigate, piInstalled }: { activeNav: NavId; onN
   );
 }
 
-function Topbar({ state, onDeploy, onRefresh, refreshing }: { state: ManagerState; onDeploy: () => void; onRefresh: () => void; refreshing: boolean }) {
-  const dirty = state.configuration.dirty;
+function Topbar({ state, onRefresh, refreshing }: { state: ManagerState; onRefresh: () => void; refreshing: boolean }) {
   return (
     <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-surface-200 bg-white/85 px-8 backdrop-blur-md dark:border-surface-800 dark:bg-surface-950/85">
       <div className="flex min-w-0 items-center text-[13px] font-medium text-surface-500">
@@ -258,7 +251,6 @@ function Topbar({ state, onDeploy, onRefresh, refreshing }: { state: ManagerStat
             最近有错误
           </span>
         )}
-        {dirty && <span className="text-[12px] font-medium text-amber-600 dark:text-amber-400">有未应用修改</span>}
         <button
           type="button"
           onClick={onRefresh}
@@ -268,16 +260,6 @@ function Topbar({ state, onDeploy, onRefresh, refreshing }: { state: ManagerStat
           className="flex h-8 w-8 items-center justify-center rounded-md text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-900 disabled:cursor-wait disabled:opacity-50 dark:hover:bg-surface-800 dark:hover:text-white"
         >
           <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
-        </button>
-        <button
-          type="button"
-          onClick={onDeploy}
-          disabled={!dirty}
-          className={`flex h-8 items-center rounded-md px-4 text-[13px] font-medium shadow-sm transition-all ${dirty
-            ? 'bg-primary-600 text-white shadow-lg shadow-primary-500/20 hover:bg-primary-700'
-            : 'cursor-not-allowed bg-surface-950 text-white opacity-40 dark:bg-white dark:text-surface-950'}`}
-        >
-          部署变更
         </button>
       </div>
     </header>
@@ -1183,70 +1165,6 @@ function CredentialModal({ provider, isOpen, onClose, onSaved }: {
   );
 }
 
-function DeployModal({ state, isOpen, onClose, onApplied }: { state: ManagerState; isOpen: boolean; onClose: () => void; onApplied: (state: ManagerState) => void }) {
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-
-  if (!isOpen) return null;
-
-  const submit = async () => {
-    setSubmitting(true);
-    setError('');
-    try {
-      const response = await applyProfile();
-      onApplied(response.state);
-      onClose();
-    } catch (caughtError) {
-      setError(caughtError instanceof ApiError ? caughtError.message : '应用失败，请查看系统诊断。');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm dark:bg-black/60" role="presentation">
-      <div className="w-full max-w-lg overflow-hidden rounded-xl border border-surface-200 bg-white shadow-2xl dark:border-surface-800 dark:bg-surface-950" role="dialog" aria-modal="true" aria-labelledby="review-title">
-        <div className="border-b border-surface-100 p-6 dark:border-surface-800">
-          <div className="flex items-center justify-between">
-            <h2 id="review-title" className="text-[18px] font-bold text-surface-900 dark:text-white">配置变更预览</h2>
-            <button type="button" onClick={onClose} disabled={submitting} title="关闭" aria-label="关闭" className="text-surface-400 hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
-          </div>
-          <p className="mt-1 text-[13px] text-surface-500">确认后生成隔离的 Pi profile。</p>
-        </div>
-        <div className="space-y-3 bg-surface-50/60 p-6 dark:bg-surface-900/20">
-          <div className="rounded-lg border border-surface-200 bg-white p-4 dark:border-surface-800 dark:bg-surface-900">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-[13px] font-medium text-surface-900 dark:text-white">候选配置</span>
-              <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold tracking-wider text-amber-700 dark:bg-amber-500/20 dark:text-amber-400">REV {state.configuration.revision}</span>
-            </div>
-            <dl className="grid grid-cols-[100px_1fr] gap-y-2 text-[12px]">
-              <dt className="text-surface-500">当前渠道</dt><dd className="text-surface-900 dark:text-surface-200">{state.active.providerName}</dd>
-              <dt className="text-surface-500">默认模型</dt><dd className="font-mono text-surface-900 dark:text-surface-200">{state.active.providerId}/{state.active.modelId}</dd>
-              <dt className="text-surface-500">Thinking</dt><dd className="text-surface-900 dark:text-surface-200">{state.active.thinking}</dd>
-              <dt className="text-surface-500">供应商数量</dt><dd className="text-surface-900 dark:text-surface-200">{state.providers.length}</dd>
-            </dl>
-          </div>
-          <div className="flex items-start rounded-md border border-surface-200 bg-white px-3 py-2.5 text-[12px] leading-5 text-surface-500 dark:border-surface-800 dark:bg-surface-900">
-            <ExternalLink size={14} className="mr-2 mt-0.5 shrink-0 text-surface-400" />
-            应用会写入 Manager 自己的数据目录，不修改项目原有的 .pi 文件。
-          </div>
-          {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
-        </div>
-        <div className="flex items-center justify-between border-t border-surface-100 bg-surface-50 p-5 dark:border-surface-800 dark:bg-surface-900">
-          <span className="text-[12px] text-surface-500">已应用 revision {state.configuration.appliedRevision}</span>
-          <div className="flex gap-3">
-            <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">取消</button>
-            <button type="button" onClick={() => void submit()} disabled={submitting} className="flex items-center rounded-md bg-primary-600 px-5 py-2 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-wait disabled:opacity-60">
-              {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
-              应用配置
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function AddCatalogModelModal({ providers, onClose, onSaved }: {
   providers: ProviderState[];
   onClose: () => void;
@@ -1887,98 +1805,25 @@ function CycleListEditor({
 }
 
 function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateChanged: (nextState: ManagerState, notice: string) => void }) {
-  const [applying, setApplying] = useState(false);
-  const [launching, setLaunching] = useState(false);
-  const [stopping, setStopping] = useState(false);
-  const [rollingBack, setRollingBack] = useState(false);
   const [importingLive, setImportingLive] = useState(false);
   const [rollingLive, setRollingLive] = useState(false);
   const [actionError, setActionError] = useState('');
 
-  const appliedSnapshot = state.runtime.appliedSnapshot as {
-    targetProject?: string;
-    active?: { providerId?: string; modelId?: string; thinking?: string };
-    cycle?: { modelRefs?: string[] };
-    gateway?: { enabled?: boolean; host?: string; port?: number };
-    providers?: ProviderState[];
-  } | null;
   const currentActiveProvider = state.providers.find((provider) => provider.id === state.active.providerId);
-  const appliedActiveProvider = appliedSnapshot?.providers?.find((provider) => provider.id === appliedSnapshot.active?.providerId);
-
-  const summarizeCycle = (refs: string[] | undefined, empty: string) => {
-    const list = (refs || []).filter(Boolean);
-    if (list.length === 0) return { text: empty, title: empty };
-    return {
-      text: `${list.length} 项 · ${list[0]}${list.length > 1 ? ' 等' : ''}`,
-      title: list.join(' / '),
-    };
-  };
-  const currentCycle = summarizeCycle(state.cycle.modelRefs, '空');
-  const appliedCycle = summarizeCycle(appliedSnapshot?.cycle?.modelRefs, '尚未应用');
+  const cycleRefs = (state.cycle.modelRefs || []).filter(Boolean);
+  const cycleSummary = cycleRefs.length === 0
+    ? { text: '空', title: '空' }
+    : { text: `${cycleRefs.length} 项 · ${cycleRefs[0]}${cycleRefs.length > 1 ? ' 等' : ''}`, title: cycleRefs.join(' / ') };
+  const liveVerify = state.runtime.lastLiveVerify;
   const statusRows = [
-    { label: '目标项目', current: state.targetProject, applied: appliedSnapshot?.targetProject || '尚未应用' },
-    { label: '默认模型', current: `${state.active.providerId}/${state.active.modelId}`, applied: appliedSnapshot?.active ? `${appliedSnapshot.active.providerId}/${appliedSnapshot.active.modelId}` : '尚未应用' },
-    { label: 'Thinking', current: state.active.thinking, applied: appliedSnapshot?.active?.thinking || '尚未应用' },
-    { label: '凭据', current: currentActiveProvider ? `${currentActiveProvider.name} · ${currentActiveProvider.credentialConfigured ? '已配置' : '未配置'}` : '未选择', applied: appliedActiveProvider ? `${appliedActiveProvider.name} · ${appliedActiveProvider.credentialConfigured ? '已配置' : '未配置'}` : '尚未应用' },
-    { label: '循环列表', current: currentCycle.text, currentTitle: currentCycle.title, applied: appliedCycle.text, appliedTitle: appliedCycle.title },
-    { label: '网关', current: `${state.gateway.host}:${state.gateway.port} · ${state.gateway.enabled ? '启用' : '关闭'}`, applied: appliedSnapshot?.gateway ? `${appliedSnapshot.gateway.host}:${appliedSnapshot.gateway.port} · ${appliedSnapshot.gateway.enabled ? '启用' : '关闭'}` : '尚未应用' },
+    { label: '目标项目', value: state.targetProject },
+    { label: '默认模型', value: `${state.active.providerId}/${state.active.modelId}` },
+    { label: 'Thinking', value: state.active.thinking },
+    { label: '凭据', value: currentActiveProvider ? `${currentActiveProvider.name} · ${currentActiveProvider.credentialConfigured ? '已配置' : '未配置'}` : '未选择' },
+    { label: '循环列表', value: cycleSummary.text, title: cycleSummary.title },
+    { label: '上次导入', value: state.runtime.lastLiveImportAt || '尚未导入' },
+    { label: '本机验证', value: liveVerify ? (liveVerify.ok ? '通过' : '未完全通过') : '尚未验证', title: liveVerify?.error || '' },
   ];
-
-  const applyNow = async () => {
-    setApplying(true);
-    setActionError('');
-    try {
-      const response = await applyProfile();
-      onStateChanged(response.state, '配置已应用到受控 Profile');
-    } catch (caughtError) {
-      setActionError(caughtError instanceof ApiError ? caughtError.message : '应用配置失败。');
-    } finally {
-      setApplying(false);
-    }
-  };
-
-  const launchNow = async () => {
-    setLaunching(true);
-    setActionError('');
-    try {
-      const response = await launchPi();
-      onStateChanged(response.state, '已启动 Pi');
-    } catch (caughtError) {
-      setActionError(caughtError instanceof ApiError ? caughtError.message : '启动 Pi 失败。');
-    } finally {
-      setLaunching(false);
-    }
-  };
-
-  const stopNow = async () => {
-    setStopping(true);
-    setActionError('');
-    try {
-      const response = await stopPi();
-      onStateChanged(response.state, '已停止 Pi');
-    } catch (caughtError) {
-      setActionError(caughtError instanceof ApiError ? caughtError.message : '停止 Pi 失败。');
-    } finally {
-      setStopping(false);
-    }
-  };
-
-  const rollbackNow = async () => {
-    if (!state.runtime.appliedSnapshot) {
-      setActionError('没有可回滚的已应用配置。');
-      return;
-    }
-    setRollingBack(true);
-    setActionError('');
-    try {
-      const response = await rollbackProfile();
-      onStateChanged(response.state, '已回滚到上次成功应用的配置');
-    } catch (caughtError) {
-      setActionError(caughtError instanceof ApiError ? caughtError.message : '回滚失败。');
-    } finally {
-      setRollingBack(false);
-    }
-  };
 
   const importLiveNow = async () => {
     if (!window.confirm('将备份并写入本机 ~/.pi/agent 的 settings.json / models.json / auth.json。继续？')) return;
@@ -2015,146 +1860,38 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">环境 Profiles</h1>
-        <p className="mt-1 text-[14px] text-surface-500">隔离 profile 用于试跑；导入本机 Pi 会备份后写入 ~/.pi/agent，供普通 pi 命令验证。</p>
+        <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">导入本机 Pi</h1>
+        <p className="mt-1 text-[14px] text-surface-500">把候选配置备份后写入 ~/.pi/agent。导完退出当前 Pi 再进，/reload 不会重读模型。</p>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
-        <div className="min-w-0 overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
-          <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
-            <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">当前状态</h2>
-            <p className="mt-1 text-[12px] text-surface-500">这部分显示候选配置、已应用配置和 profile 位置。</p>
-          </div>
-          <div className="overflow-x-auto p-5">
-            <table className="w-full min-w-[520px] text-left text-[12px]">
-              <thead className="text-[11px] font-medium text-surface-500">
-                <tr>
-                  <th className="w-[88px] pb-3 pr-3 font-medium">项目</th>
-                  <th className="pb-3 pr-3 font-medium"><span className="inline-flex items-center gap-1.5 text-surface-700 dark:text-surface-200"><Save size={13} />候选配置</span></th>
-                  <th className="pb-3 font-medium"><span className="inline-flex items-center gap-1.5 text-surface-700 dark:text-surface-200"><CheckCircle2 size={13} />已应用配置</span></th>
+      <div className="max-w-3xl overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
+        <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
+          <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">候选配置</h2>
+          <p className="mt-1 text-[12px] text-surface-500">写入 ~/.pi/agent/settings.json、models.json、auth.json。</p>
+        </div>
+        <div className="overflow-x-auto p-5">
+          <table className="w-full text-left text-[12px]">
+            <tbody className="divide-y divide-surface-100 dark:divide-surface-800/60">
+              {statusRows.map((row) => (
+                <tr key={row.label}>
+                  <th className="w-[88px] whitespace-nowrap py-2.5 pr-3 align-top font-medium text-surface-500">{row.label}</th>
+                  <td className="min-w-0 py-2.5 align-top font-mono text-surface-900 dark:text-white" title={row.title || row.value}><span className="block truncate">{row.value}</span></td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-100 dark:divide-surface-800/60">
-                {statusRows.map((row) => (
-                  <tr key={row.label}>
-                    <th className="whitespace-nowrap py-2.5 pr-3 align-top font-medium text-surface-500">{row.label}</th>
-                    <td className="min-w-0 py-2.5 pr-3 align-top font-mono text-surface-900 dark:text-white" title={row.currentTitle || row.current}><span className="block truncate">{row.current}</span></td>
-                    <td className="min-w-0 py-2.5 align-top font-mono text-surface-900 dark:text-white" title={row.appliedTitle || row.applied}><span className="block truncate">{row.applied}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="space-y-3 border-t border-surface-100 bg-surface-50/50 px-5 py-4 dark:border-surface-800 dark:bg-surface-900/20">
-            <div>
-              <p className="mb-2 text-[11px] text-surface-500">本机 Pi · 普通 pi 命令会读到</p>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => void importLiveNow()} disabled={importingLive} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md bg-primary-600 px-3 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-wait disabled:opacity-60">
-                  {importingLive ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Download size={14} className="mr-2" />}
-                  导入本机 Pi
-                </button>
-                <button type="button" onClick={() => void rollbackLiveNow()} disabled={rollingLive || !state.runtime.lastLiveBackupDir} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-surface-200 px-3 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
-                  {rollingLive ? <Loader2 size={14} className="mr-2 animate-spin" /> : <RotateCcw size={14} className="mr-2" />}
-                  回滚本机 Pi
-                </button>
-              </div>
-            </div>
-            <div>
-              <p className="mb-2 text-[11px] text-surface-500">隔离 Profile · 试跑，普通 pi 读不到</p>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => void applyNow()} disabled={applying} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-surface-200 px-3 text-[13px] font-medium text-surface-700 hover:bg-surface-50 disabled:cursor-wait disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800">
-                  {applying ? <Loader2 size={14} className="mr-2 animate-spin" /> : <CheckCircle2 size={14} className="mr-2" />}
-                  应用隔离 Profile
-                </button>
-                <button type="button" onClick={() => void launchNow()} disabled={launching} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-surface-200 px-3 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-wait disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
-                  {launching ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Play size={14} className="mr-2" />}
-                  应用并启动
-                </button>
-                <button type="button" onClick={() => void stopNow()} disabled={stopping || !state.runtime.lastLaunchPid} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-surface-200 px-3 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
-                  {stopping ? <Loader2 size={14} className="mr-2 animate-spin" /> : <X size={14} className="mr-2" />}
-                  停止 Pi
-                </button>
-                <button type="button" onClick={() => void rollbackNow()} disabled={rollingBack || !state.runtime.appliedSnapshot} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-surface-200 px-3 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
-                  {rollingBack ? <Loader2 size={14} className="mr-2 animate-spin" /> : <RotateCcw size={14} className="mr-2" />}
-                  回滚隔离 Profile
-                </button>
-              </div>
-            </div>
-          </div>
-          {actionError && <div className="mx-5 mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{actionError}</div>}
+              ))}
+            </tbody>
+          </table>
         </div>
-
-        <div className="space-y-4">
-          <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
-            <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
-              <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">注入预览</h2>
-              <p className="mt-1 text-[12px] text-surface-500">应用时会写入 Manager-owned 的隔离 profile。</p>
-            </div>
-            <div className="space-y-3 p-5 text-[12px]">
-              <div className="flex justify-between gap-4">
-                <span className="text-surface-500">profile 目录</span>
-                <span className="max-w-[220px] truncate font-mono text-surface-900 dark:text-white" title={state.runtime.profilePath}>{state.runtime.profilePath || '尚未生成'}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-surface-500">settings.json</span>
-                <span className="max-w-[220px] truncate font-mono text-surface-900 dark:text-white">{state.runtime.profilePath ? `${state.runtime.profilePath}/settings.json` : '尚未生成'}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-surface-500">extensions</span>
-                <span className="max-w-[220px] truncate font-mono text-surface-900 dark:text-white" title={state.runtime.extensionPath}>{state.runtime.extensionPath || '尚未生成'}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-surface-500">应用时间</span>
-                <span className="font-mono text-surface-900 dark:text-white">{state.runtime.lastAppliedAt || '尚未应用'}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-surface-500">启动时间</span>
-                <span className="font-mono text-surface-900 dark:text-white">{state.runtime.lastLaunchAt || '尚未启动'}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-surface-500">启动 PID</span>
-                <span className="font-mono text-surface-900 dark:text-white">{state.runtime.lastLaunchPid ?? '无'}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-surface-500">停止时间</span>
-                <span className="font-mono text-surface-900 dark:text-white">{state.runtime.lastStopAt || '尚未停止'}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-surface-500">本机 Pi 导入</span>
-                <span className="font-mono text-surface-900 dark:text-white">{state.runtime.lastLiveImportAt || '尚未导入'}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-surface-500">本机验证</span>
-                <span className="max-w-[220px] truncate font-mono text-surface-900 dark:text-white" title={state.runtime.lastLiveVerify?.error || ''}>{state.runtime.lastLiveVerify ? (state.runtime.lastLiveVerify.ok ? '通过' : '未完全通过') : '尚未验证'}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-[#0a0a0a]">
-            <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
-              <h2 className="text-[14px] font-semibold text-surface-900 dark:text-white">最近状态</h2>
-              <p className="mt-1 text-[12px] text-surface-500">当前版本不会把密钥、token 或正文写入事件。</p>
-            </div>
-            <div className="space-y-3 p-5 text-[12px]">
-              <div className="flex justify-between gap-4">
-                <span className="text-surface-500">配置 revision</span>
-                <span className="font-mono text-surface-900 dark:text-white">{state.configuration.revision}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-surface-500">已应用 revision</span>
-                <span className="font-mono text-surface-900 dark:text-white">{state.configuration.appliedRevision}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-surface-500">dirty</span>
-                <span className="font-mono text-surface-900 dark:text-white">{state.configuration.dirty ? '是' : '否'}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-surface-500">Pi 状态</span>
-                <span className="font-mono text-surface-900 dark:text-white">{state.pi.installed ? '已安装' : '未安装'} · {state.pi.subscriptionReady ? '订阅可用' : '未验证'}</span>
-              </div>
-            </div>
-          </div>
+        <div className="flex flex-wrap gap-2 border-t border-surface-100 bg-surface-50/50 px-5 py-4 dark:border-surface-800 dark:bg-surface-900/20">
+          <button type="button" onClick={() => void importLiveNow()} disabled={importingLive} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md bg-primary-600 px-3 text-[13px] font-medium text-white shadow-sm transition-colors hover:bg-primary-700 disabled:cursor-wait disabled:opacity-60">
+            {importingLive ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Download size={14} className="mr-2" />}
+            导入本机 Pi
+          </button>
+          <button type="button" onClick={() => void rollbackLiveNow()} disabled={rollingLive || !state.runtime.lastLiveBackupDir} className="inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-md border border-surface-200 px-3 text-[13px] font-medium text-surface-700 hover:bg-surface-50 hover:text-surface-950 disabled:cursor-not-allowed disabled:opacity-60 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800 dark:hover:text-white">
+            {rollingLive ? <Loader2 size={14} className="mr-2 animate-spin" /> : <RotateCcw size={14} className="mr-2" />}
+            回滚本机 Pi
+          </button>
         </div>
+        {actionError && <div className="mx-5 mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{actionError}</div>}
       </div>
     </div>
   );
@@ -2192,11 +1929,9 @@ function DiagnosticsPage({ state }: { state: ManagerState }) {
           <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-surface-900 dark:text-white"><CheckCircle2 size={15} /> 配置状态</div>
           <dl className="space-y-2 text-[12px]">
             <div className="flex justify-between gap-4"><dt className="text-surface-500">revision</dt><dd className="font-mono">{state.configuration.revision}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">已应用</dt><dd className="font-mono">{state.configuration.appliedRevision}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">dirty</dt><dd>{state.configuration.dirty ? '是' : '否'}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">Profile</dt><dd className="max-w-[220px] truncate font-mono" title={state.runtime.profilePath}>{state.runtime.profilePath || '尚未生成'}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">Pi PID</dt><dd className="font-mono">{state.runtime.lastLaunchPid ?? '无'}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-surface-500">停止时间</dt><dd className="font-mono">{state.runtime.lastStopAt || '尚未停止'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">本机导入</dt><dd className="max-w-[220px] truncate font-mono" title={state.runtime.lastLiveImportAt || ''}>{state.runtime.lastLiveImportAt || '尚未导入'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">本机验证</dt><dd>{state.runtime.lastLiveVerify ? (state.runtime.lastLiveVerify.ok ? '通过' : '未完全通过') : '尚未验证'}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-surface-500">备份目录</dt><dd className="max-w-[220px] truncate font-mono" title={state.runtime.lastLiveBackupDir}>{state.runtime.lastLiveBackupDir || '无'}</dd></div>
           </dl>
         </div>
         <div className="rounded-xl border border-surface-200 bg-white p-5 dark:border-surface-800 dark:bg-[#0a0a0a]">
@@ -2232,7 +1967,6 @@ function App() {
   const [credentialProvider, setCredentialProvider] = useState<ProviderState | null>(null);
   const [loginProvider, setLoginProvider] = useState<ProviderState | null | undefined>(undefined);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [showDeployModal, setShowDeployModal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -2319,7 +2053,7 @@ function App() {
     <div className="flex h-screen w-full bg-surface-50 font-sans antialiased dark:bg-surface-950">
       <Sidebar activeNav={activeNav} onNavigate={setActiveNav} piInstalled={state.pi.installed} />
       <main className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar state={state} onDeploy={() => setShowDeployModal(true)} onRefresh={() => void refreshState()} refreshing={refreshing} />
+        <Topbar state={state} onRefresh={() => void refreshState()} refreshing={refreshing} />
         <div className="flex-1 overflow-y-auto p-8">
           <div className="mx-auto max-w-[1200px] pb-20">
             {error && <div className="mb-5 flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
@@ -2335,7 +2069,6 @@ function App() {
       <ImportPiModal key={showImportModal ? 'import-open' : 'import-closed'} isOpen={showImportModal} onClose={() => setShowImportModal(false)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
       <NativeLoginModal key={loginProvider === undefined ? 'login-closed' : loginProvider?.id || 'login-picker'} provider={loginProvider} isOpen={loginProvider !== undefined} onClose={() => setLoginProvider(undefined)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
       <CredentialModal key={credentialProvider?.id || 'credential-closed'} provider={credentialProvider} isOpen={Boolean(credentialProvider)} onClose={() => setCredentialProvider(null)} onSaved={(nextState, nextNotice) => { setState(nextState); setNotice(nextNotice); setError(''); }} />
-      <DeployModal key={showDeployModal ? 'open' : 'closed'} state={state} isOpen={showDeployModal} onClose={() => setShowDeployModal(false)} onApplied={(nextState) => { setState(nextState); setNotice('配置已应用'); setError(''); }} />
     </div>
   );
 }
