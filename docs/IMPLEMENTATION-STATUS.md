@@ -1,125 +1,53 @@
 # Implementation Status
 
-## Current slice
-
-The project has moved from the React-only prototype to the first real vertical
-slice:
+Current product path (2026-09-10):
 
 ```text
-React provider cards
-  -> /api/state
-  -> persisted Pi Manager state
+供应商与账号
+  -> 新增 OpenAI 兼容渠道 / 勾选导入本机 Pi / 原生登录
+  -> 可选 GET /models 发现并勾选模型
 
-Add provider form
-  -> /api/providers
-  -> provider metadata + local credential storage
+模型资源库
+  -> 完整目录、循环列表、默认模型、Thinking、Context
 
-Edit custom provider form
-  -> PATCH /api/providers/:id
-  -> name / providerId / baseUrl / model list / optional API key
-
-Model default controls and Thinking mapping
-  -> /api/route + /api/models/thinking
-  -> validated candidate route + capability-checked Thinking mapping
-
-Cycle list editing
-  -> /api/models/cycle
-  -> ordered enabledModels injection with stale-ref validation
-  -> provider catalog injection through profile models.json
-
-Model context metadata editing
-  -> /api/models/context-window
-  -> validated contextWindow persistence and Pi models.json/extension injection
-
-Profile apply/launch/stop/rollback
-  -> /api/apply + /api/pi/launch + /api/pi/stop + /api/profile/rollback
-  -> Pi-compatible isolated profile generation, direct models.json catalog injection, launch entry, stop control and last-applied snapshot restore
-
-Provider connection testing
-  -> /api/providers/:id/test
-  -> single-action reachability probe with categorized failures
-
-Pi native auth status
-  -> provider-specific `pi auth check --provider`
-  -> short-lived cached, credential-free status used by cards, route validation and connection tests
-
-Pi native login
-  -> POST /api/pi/login + ModelRuntime.login
-  -> OAuth / API key writes to the live Pi auth.json without copying refresh tokens
+导入本机 Pi
+  -> 备份 ~/.pi/agent
+  -> 合并写入 settings.json / models.json / auth.json
+  -> 退出当前 Pi 再进后生效
 ```
 
-The implementation uses the existing card layout from the prototype as the
-working UI. It does not fork Pi or modify the user's project `.pi` directory.
-
-## Entry-page decision
-
-For the current product iteration, `供应商与账号` is the default entry page,
-following the Cockpit Tools style of putting the most frequent management task
-first. The conceptual `总览` page remains in the product specification as a
-future status surface, but it is not implemented as a separate first screen in
-this slice.
-
-This is an implementation decision, not a rewrite of the original prototype
-specification. The prototype specification continues to describe the broader
-MVP flow; later implementation slices must either add the overview or record a
-new decision if the information is intentionally folded into the provider page.
+Does not fork Pi. Does not modify a user's project `.pi`.
 
 ## Included
 
-- Read real provider, model, active-route, Pi, gateway and configuration status
-  from `GET /api/state`.
-- Show loading and recoverable error states in the web UI.
-- Search provider cards and refresh the state from the backend.
-- Add a custom OpenAI-compatible provider with one or more model IDs.
-- Fetch an OpenAI-compatible provider's upstream `/models` catalog during
-  provider setup, then let the user search, edit, select and save models.
-- Import existing OpenAI-compatible providers from the local Pi `models.json`
-  without modifying the source file or writing plaintext keys into state.json.
-- Edit an existing custom provider's name, provider ID, base URL, model list
-  and optional API key, while preserving remaining model metadata.
-- Save an optional API key through the existing credential abstraction without
-  returning the key in API state.
-- Configure or clear API keys for existing OpenAI-compatible and local-bridge
-  providers from the provider cards. Native subscription providers stay on Pi login.
-- Test provider connectivity from the provider cards with categorized failure
-  messages.
-- Detect each native provider's Pi authentication state independently and
-  refresh it after the short cache window without exposing credentials; an
-  explicit UI refresh or connection test forces a fresh probe.
-- Log in to featured Pi-native providers from the provider cards using the
-  official ModelRuntime login path; API keys and OAuth tokens stay in Pi
-  auth.json and are never copied into Manager state.
-- Keep provider cards focused on connection resources; configure the default
-  provider, model and thinking level from the model resource page.
-- Edit the Ctrl+P cycling list with ordered add/remove/reorder controls and
-  persist it as enabledModels in the generated profile.
-- Edit each complete-catalog model's context window and inject the value into
-  the generated Pi model definition.
-- Add or remove models in a custom provider's complete catalog, while cleaning
-  cycle-list refs and refusing to delete the active default model.
-- Edit thinking-level mappings with Pi-level vs upstream-value vs unsupported
-  states, then persist them through the manager state and profile generator.
-- Apply, launch, stop and roll back the isolated profile from the Profile page.
-- Import the candidate configuration into the local Pi agent directory after a
-  backup, then verify with `pi --list-models` and roll back from that backup.
-- Keep generated settings, models and launcher at the profile root expected by
-  Pi's PI_CODING_AGENT_DIR, while preserving unrelated legacy files.
-- Validate candidate routes against provider credentials, bridge status and
-  model thinking capabilities before saving them.
-- Track a minimal candidate revision and applied revision so the UI can
-  distinguish unsaved candidate changes from the last applied profile.
-- Serve `web/dist` from the Node server after a production build and proxy
-  `/api` during Vite development.
+- Read provider, model, route, Pi and gateway status from `GET /api/state`.
+- Empty start: no seed providers, cycle, or active route.
+- Add / edit / delete custom OpenAI-compatible providers.
+- Fetch an upstream OpenAI `/models` catalog during setup; search, edit,
+  select and save. Retry `/v1/models` when the root path returns HTML or 404.
+- Import existing OpenAI-compatible providers from local Pi `models.json`
+  after explicit checkbox selection. Keys stay out of `state.json`.
+- Configure or clear API keys for OpenAI-compatible and local-bridge cards.
+  Native subscriptions stay on Pi login (`ModelRuntime` → `~/.pi/agent/auth.json`).
+- Test provider connectivity with categorized, sanitized failures.
+- Edit the complete catalog, Ctrl+P cycle list, default route, thinking map
+  and context window as candidate config.
+- Import candidate config into `~/.pi/agent` after a Manager-owned backup,
+  verify with `pi --list-models --offline`, and roll back from that backup.
+- Serve `web/dist` from the Node server; Vite proxies `/api` in development.
+
+## Removed from the UI
+
+Isolated profile apply / launch / stop / rollback. Daily path is live import.
+Backend endpoints still exist and are leftover cleanup.
 
 ## Deferred
 
-- profile diff preview and process ownership;
+- strip isolated profile backend (`/api/apply`, launch, stop);
 - automatic background catalog refresh;
 - Antigravity adapter.
 
 ## Verification
-
-The slice is verified with:
 
 ```bash
 npm run check
@@ -127,8 +55,5 @@ npm test
 npm --prefix web run build
 ```
 
-Manual verification also requires starting the Manager API and the Vite web
-server, then adding a provider through the UI and confirming that a subsequent
-refresh reads it from the persisted Manager state. Importing to the local Pi
-agent directory writes `~/.pi/agent/settings.json` and `models.json` after a
-Manager-owned backup; use `pi --list-models` to confirm the imported catalog.
+Manual: start the API and Vite UI, import to live Pi, quit the running `pi`
+session and reopen. `/reload` does not reread `models.json` or `enabledModels`.

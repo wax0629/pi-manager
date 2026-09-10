@@ -1,55 +1,70 @@
 # Pi Manager
 
-Pi Manager is a local desktop control plane for Pi coding-agent providers,
-credentials, model catalogs, thinking-level mappings, and launch profiles.
+Pi 的本地控制面。不 fork Pi，不改项目 `.pi`。在页面里管供应商、模型和 Thinking，确认后备份并写入 `~/.pi/agent`，给普通 `pi` 命令用。
 
-The project is currently moving from the design baseline into implementation.
-The first implementation slice supports:
+## 能做什么
 
-- Pi-native subscription and API-key login flows;
-- user-defined OpenAI-compatible relay providers;
-- one model view for the effective Pi catalog;
-- editing the Ctrl+P cycling list and default model;
-- model metadata and thinking-level mappings;
-- isolated Pi profiles that can be applied, launched, and rolled back.
+- **供应商与账号**：新增 OpenAI 兼容中转、从本机 Pi 勾选导入、Pi 原生登录。新增时可请求上游 `/models`，勾选后再保存。
+- **模型资源库**：完整目录、Ctrl+P 循环列表、默认模型、Thinking 映射、Context 窗口。
+- **导入本机 Pi**：备份后合并写入 `~/.pi/agent` 的 `settings.json` / `models.json` / `auth.json`，可回滚。
 
-The current slice connects the provider and model views to the local Manager
-API. It can read persisted provider state, add a custom OpenAI-compatible
-provider, store its credential through the local credential abstraction, and
-save a validated default provider/model/thinking route as a candidate change.
-Thinking-map editing and cycling-list editing are now part of the current
-slice. Profile application, launch and rollback are now part of the current
-slice too. The remaining Pi lifecycle work is richer process ownership and
-diagnostics.
-Provider connection testing with classified failures is now part of the
-current slice too.
+日常路径：改候选配置 → **导入本机 Pi** → 退出当前 Pi 再进。`/reload` 不会重读模型和循环列表。
 
-Pi Manager is intended to work with the official Pi package. It does not fork
-Pi or modify a user's project `.pi` directory by default.
+## 不做什么
 
-See [docs/PRODUCT-DESIGN.md](docs/PRODUCT-DESIGN.md) for the current design
-draft, configuration injection model, risks, and proposed acceptance criteria.
+- 不 fork、不改 Pi 源码。
+- 不改用户项目里的 `.pi`。
+- 不把 refresh token 拷进 Manager。
+- 不做 Antigravity 专用 OAuth；Antigravity 当本机 OpenAI 兼容桥（`127.0.0.1:8045/v1`）。
 
-See [docs/PRD.md](docs/PRD.md) for the product requirements, user stories,
-feature priorities, workflows, and MVP acceptance criteria.
+## 要求
 
-See [docs/PROTOTYPE-SPEC.md](docs/PROTOTYPE-SPEC.md) for the functional
-prototype screens, elements, states, interactions, and clickable flows.
+- Node 20+
+- 已安装官方 [Pi](https://github.com/badlogic/pi-mono)（`pi` 在 PATH 里）
 
-See [docs/PI-CAPABILITY-MATRIX.md](docs/PI-CAPABILITY-MATRIX.md) for the Pi
-runtime facts, verified observations, and pending capability checks.
+## 运行
 
-See [docs/TEST-SCENARIOS.md](docs/TEST-SCENARIOS.md) for executable acceptance
-scenarios and evidence requirements.
+```bash
+npm start          # API  http://127.0.0.1:8670
+npm run dev:web    # UI   http://localhost:5173/
+```
 
-For the current implementation boundary, see
-[docs/IMPLEMENTATION-STATUS.md](docs/IMPLEMENTATION-STATUS.md).
+生产构建后只开 API 即可，静态页从 `web/dist` 提供：
 
-## Project status
+```bash
+npm --prefix web run build
+npm start
+```
 
-Implementation in progress on the provider state slice; the broader MVP
-contract remains governed by the product and prototype documents above.
+## 日常用法
+
+1. 打开供应商页：新增 API，或从本机 Pi 勾选导入，或登录原生渠道。
+2. 打开模型资源库：核对目录、默认模型、循环列表、Thinking。
+3. 打开「导入本机 Pi」，确认后写入 `~/.pi/agent`。
+4. 退出正在跑的 Pi，重新打开。用 `pi --list-models --offline` 核对。
+
+导坏了用同一页的 **回滚本机 Pi**。
+
+## 数据放哪
+
+| 路径 | 用途 |
+| --- | --- |
+| `~/.pi-manager/` | Manager 状态、密钥存储、导入备份 |
+| `~/.pi/agent/` | 本机 Pi 真正读取的配置 |
+
+密钥不进 `state.json`，也不在 API 响应里回显。
+
+## 开发
+
+```bash
+npm test
+npm run check
+npm --prefix web run lint
+npm --prefix web run build
+```
+
+设计草案仍在 `docs/`，以本 README 和当前 UI 为准。隔离 Profile 的 apply / launch / stop 后端还在，页面已拿掉，不是日常路径。
 
 ## License
 
-To be decided before the first distributable release.
+尚未选定。
