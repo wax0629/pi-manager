@@ -144,8 +144,16 @@ async function main(argv = process.argv.slice(2)) {
   return 0;
 }
 
-const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isDirectRun) {
+export function isCliEntrypoint(argv1 = process.argv[1], moduleUrl = import.meta.url) {
+  if (!argv1) return false;
+  try {
+    return fs.realpathSync(argv1) === fs.realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return path.resolve(argv1) === fileURLToPath(moduleUrl);
+  }
+}
+
+if (isCliEntrypoint()) {
   main().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
