@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createGateway } from "./gateway.mjs";
 import { createPiAuthProbe } from "./pi-auth.mjs";
 import { discoverProviderModels } from "./provider-discovery.mjs";
-import { applyLivePiConfig, restoreLivePiBackup } from "./pi-apply.mjs";
+import { applyLivePiConfig, inspectLivePiSync, restoreLivePiBackup } from "./pi-apply.mjs";
 import { readPiModelsConfig, resolvePiAgentDir } from "./pi-import.mjs";
 import { createNativeAuth } from "./pi-native.mjs";
 import { sanitizeConnectionTestUrl, testProviderConnection } from "./provider-test.mjs";
@@ -300,6 +300,7 @@ async function publicState({ forceAuth = false } = {}) {
       appliedRevision: current.runtime.appliedRevision,
       dirty: current.runtime.configRevision !== current.runtime.appliedRevision
     },
+    liveSync: inspectLivePiSync({ agentDir: resolvePiAgentDir(), state: current }),
     runtime: { ...current.runtime, gatewayStats, piExecutable },
     pi: detectPi(),
     storage: { dataDir: store.dataDir, statePath: store.statePath },
@@ -320,11 +321,15 @@ async function applyLivePi() {
     state.runtime.lastLiveImportAt = new Date().toISOString();
     state.runtime.lastLiveBackupDir = result.backupDir;
     state.runtime.lastLiveVerify = {
-      ok: Boolean(result.verify?.ok),
-      error: result.verify?.error || "",
-      refs: Array.isArray(result.verify?.refs) ? result.verify.refs : []
+      ok: Boolean(result.verify?.ok) && Boolean(result.sync?.synchronized),
+      error: result.verify?.ok
+        ? (result.sync?.synchronized ? "" : `本地 settings.json 缺失: ${result.sync?.missingFromLive?.join(" / ")}`)
+        : (result.verify?.error || ""),
+      refs: Array.isArray(result.verify?.refs) ? result.verify.refs : [],
+      missingFromLive: result.sync?.missingFromLive || [],
+      synchronized: Boolean(result.sync?.synchronized)
     };
-    state.runtime.lastError = result.verify?.ok ? null : (result.verify?.error || null);
+    state.runtime.lastError = state.runtime.lastLiveVerify.ok ? null : (state.runtime.lastLiveVerify.error || null);
   });
   store.recordEvent("pi", "已导入本机 Pi 配置", result.agentDir);
   return result;

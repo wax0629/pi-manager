@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   applyLivePiConfig,
+  inspectLivePiSync,
   mergeLiveAuth,
   mergeLiveModels,
   mergeLiveSettings,
@@ -99,6 +100,29 @@ test("live import merges settings and models while preserving unrelated fields",
   assert.equal(auth.qiniu.key, "qiniu-live-secret");
   assert.equal(fs.existsSync(path.join(result.backupDir, "settings.json")), true);
   assert.equal(result.verify.ok, true);
+  assert.equal(result.sync.synchronized, true);
+  assert.deepEqual(result.sync.missingFromLive, []);
+});
+
+test("inspectLivePiSync detects drift when settings.json is missing cycle models", (t) => {
+  const fixture = makeFixture(t);
+  fs.mkdirSync(fixture.agentDir, { recursive: true });
+  fs.writeFileSync(path.join(fixture.agentDir, "settings.json"), `${JSON.stringify({
+    enabledModels: ["qiniu/grok-4.6"]
+  }, null, 2)}\n`);
+
+  const drift = inspectLivePiSync({
+    agentDir: fixture.agentDir,
+    state: {
+      cycle: {
+        modelRefs: ["qiniu/grok-4.6", "zenmux/deepseek/deepseek-v4.1-flash", "aicentos-claude/claude-opus-5"]
+      }
+    }
+  });
+
+  assert.equal(drift.synchronized, false);
+  assert.deepEqual(drift.missingFromLive, ["zenmux/deepseek/deepseek-v4.1-flash", "aicentos-claude/claude-opus-5"]);
+  assert.deepEqual(drift.extraInLive, []);
 });
 
 test("live rollback restores the previous agent files", (t) => {
