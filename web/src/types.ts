@@ -118,6 +118,16 @@ export interface ManagerState {
     appliedRevision: number;
     dirty: boolean;
   };
+  liveSync?: {
+    synchronized: boolean;
+    settingsPath: string;
+    expectedCycleRefs: string[];
+    currentEnabledModels: string[];
+    missingFromLive: string[];
+    extraInLive: string[];
+    defaultProvider: string;
+    defaultModel: string;
+  };
   runtime: {
     profilePath: string;
     extensionPath: string;
@@ -131,7 +141,13 @@ export interface ManagerState {
     lastError: string | null;
     lastLiveImportAt: string | null;
     lastLiveBackupDir: string;
-    lastLiveVerify: { ok: boolean; error: string; refs: string[] } | null;
+    lastLiveVerify: {
+      ok: boolean;
+      error: string;
+      refs: string[];
+      missingFromLive?: string[];
+      synchronized?: boolean;
+    } | null;
     gatewayStats: GatewayStats;
     piExecutable: string;
   };

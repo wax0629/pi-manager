@@ -139,6 +139,28 @@ export function restoreLivePiBackup({ agentDir, backupDir }) {
   return { agentDir, backupDir };
 }
 
+export function inspectLivePiSync({ agentDir = resolvePiAgentDir(), state }) {
+  const settingsPath = path.join(agentDir, "settings.json");
+  const existingSettings = readJsonIfExists(settingsPath);
+  const expectedCycleRefs = Array.isArray(state?.cycle?.modelRefs) ? state.cycle.modelRefs : [];
+  const currentEnabledModels = Array.isArray(existingSettings?.enabledModels) ? existingSettings.enabledModels : [];
+
+  const missingFromLive = expectedCycleRefs.filter((ref) => !currentEnabledModels.includes(ref));
+  const extraInLive = currentEnabledModels.filter((ref) => !expectedCycleRefs.includes(ref));
+  const synchronized = missingFromLive.length === 0 && extraInLive.length === 0;
+
+  return {
+    synchronized,
+    settingsPath,
+    expectedCycleRefs,
+    currentEnabledModels,
+    missingFromLive,
+    extraInLive,
+    defaultProvider: existingSettings?.defaultProvider || "",
+    defaultModel: existingSettings?.defaultModel || ""
+  };
+}
+
 function verifyLiveModels({ agentDir, piExecutable, enabledModels, listModels }) {
   if (typeof listModels === "function") {
     const output = listModels({ agentDir, piExecutable });
@@ -216,6 +238,8 @@ export function applyLivePiConfig({
     listModels
   });
 
+  const sync = inspectLivePiSync({ agentDir, state });
+
   return {
     agentDir,
     backupDir: backup.backupDir,
@@ -225,6 +249,7 @@ export function applyLivePiConfig({
     enabledModels: nextSettings.enabledModels,
     defaultProvider: nextSettings.defaultProvider,
     defaultModel: nextSettings.defaultModel,
-    verify
+    verify,
+    sync
   };
 }

@@ -1881,12 +1881,39 @@ function ProfilePage({ state, onStateChanged }: { state: ManagerState; onStateCh
     }
   };
 
+  const isDrifted = Boolean(state.liveSync && !state.liveSync.synchronized && state.liveSync.missingFromLive.length > 0);
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-[28px] font-bold leading-tight tracking-tight text-surface-900 dark:text-white">{t('live.title')}</h1>
         <p className="mt-1 text-[14px] text-surface-500">{t('live.subtitle')}</p>
       </div>
+
+      {isDrifted && (
+        <div className="max-w-3xl rounded-xl border border-amber-300 bg-amber-50/80 p-4 text-[13px] text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          <div className="flex items-start gap-2.5">
+            <CircleAlert size={16} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="space-y-2">
+              <p className="font-medium leading-relaxed">
+                {t('live.driftWarning', {
+                  count: state.liveSync?.missingFromLive.length || 0,
+                  missing: (state.liveSync?.missingFromLive || []).join(' / ')
+                })}
+              </p>
+              <button
+                type="button"
+                onClick={() => void importLiveNow()}
+                disabled={importingLive}
+                className="inline-flex h-7 items-center rounded bg-amber-700 px-2.5 text-[12px] font-medium text-white transition-colors hover:bg-amber-800 disabled:opacity-50 dark:bg-amber-600 dark:hover:bg-amber-500"
+              >
+                {importingLive ? <Loader2 size={12} className="mr-1.5 animate-spin" /> : <Download size={12} className="mr-1.5" />}
+                {t('live.driftSyncAction')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-3xl overflow-hidden rounded-xl border border-surface-200 bg-white dark:border-surface-800 dark:bg-surface-900">
         <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
