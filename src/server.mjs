@@ -661,9 +661,16 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
   }
   if (req.method === "POST" && pathname === "/api/providers/discover") {
     const body = await parseBody(req);
+    let resolvedApiKey = body.apiKey;
+    if (!resolvedApiKey && body.providerId) {
+      const provider = store.provider(body.providerId);
+      if (provider) {
+        resolvedApiKey = store.credential(provider);
+      }
+    }
     const result = await discoverProviderModels({
       baseUrl: body.baseUrl,
-      apiKey: body.apiKey
+      apiKey: resolvedApiKey
     });
     sendJson(res, 200, { ok: true, result });
     return;

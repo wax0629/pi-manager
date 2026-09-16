@@ -73,7 +73,7 @@ export async function listFeaturedNativeProviders(): Promise<{ ok: true; provide
   return request<{ ok: true; providers: ProviderState[] }>('/api/pi/native-providers');
 }
 
-export async function discoverProviderModels(input: { baseUrl: string; apiKey?: string }): Promise<{ ok: true; result: ProviderDiscoveryResult }> {
+export async function discoverProviderModels(input: { baseUrl: string; apiKey?: string; providerId?: string }): Promise<{ ok: true; result: ProviderDiscoveryResult }> {
   return request<{ ok: true; result: ProviderDiscoveryResult }>('/api/providers/discover', {
     method: 'POST',
     body: JSON.stringify(input),
