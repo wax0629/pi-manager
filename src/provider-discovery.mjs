@@ -1,4 +1,5 @@
 import { upstreamUrl } from "./gateway.mjs";
+import { inferModelInputs } from "./model-capabilities.mjs";
 import { classifyConnectionError, CONNECTION_TEST_CATEGORIES, sanitizeConnectionTestUrl } from "./provider-test.mjs";
 
 function normalizeModels(payload) {
@@ -22,7 +23,7 @@ function normalizeModels(payload) {
       id,
       name: String(source?.name || source?.display_name || id).trim() || id,
       reasoning: Boolean(source?.reasoning || source?.supports_reasoning),
-      input: Array.isArray(source?.input) && source.input.length ? source.input.map(String) : ["text"],
+      input: inferModelInputs(id, source?.input),
       contextWindow: Number(source?.contextWindow || source?.context_window || source?.context_length) || undefined,
       maxTokens: Number(source?.maxTokens || source?.max_tokens || source?.max_output_tokens) || undefined,
       ownedBy: String(source?.owned_by || source?.ownedBy || "").trim()

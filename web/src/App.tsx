@@ -785,6 +785,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
                     <input type="checkbox" checked={selectedModelIds.includes(model.id)} onChange={(event) => toggleModelSelection(model.id, event.target.checked)} aria-label={t('editor.selectModel', { id: model.id })} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
                     <input value={model.id} onChange={(event) => updateDiscoveredModel(model.id, { id: event.target.value })} aria-label={t('editor.modelIdAria', { id: model.id })} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 font-mono text-[12px] text-surface-900 outline-none focus:border-surface-300 focus:bg-white dark:text-white dark:focus:border-surface-600 dark:focus:bg-surface-950" />
                     <input value={model.name} onChange={(event) => updateDiscoveredModel(model.id, { name: event.target.value })} aria-label={t('editor.modelNameAria', { id: model.id })} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 text-[12px] text-surface-700 outline-none focus:border-surface-300 focus:bg-white dark:text-surface-200 dark:focus:border-surface-600 dark:focus:bg-surface-950" />
+                    <label className="flex shrink-0 items-center gap-1 text-[10px] text-surface-400" title={t('editor.visionHint')}><input type="checkbox" checked={model.input?.includes('image')} onChange={(event) => updateDiscoveredModel(model.id, { input: event.target.checked ? ['text', 'image'] : ['text'] })} aria-label={t('editor.visionAria', { id: model.id })} />{t('common.vision')}</label>
                     <label className="flex shrink-0 items-center gap-1 text-[10px] text-surface-400" title={t('editor.thinkingHint')}><input type="checkbox" checked={model.reasoning} onChange={(event) => updateDiscoveredModel(model.id, { reasoning: event.target.checked })} aria-label={t('editor.thinkingAria', { id: model.id })} />{t('common.thinking')}</label>
                   </div>
                 ))}
@@ -1242,6 +1243,7 @@ function AddCatalogModelModal({ providers, onClose, onSaved }: {
   const [modelId, setModelId] = useState('');
   const [name, setName] = useState('');
   const [reasoning, setReasoning] = useState(true);
+  const [supportsImage, setSupportsImage] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -1258,6 +1260,7 @@ function AddCatalogModelModal({ providers, onClose, onSaved }: {
         id: modelId.trim(),
         name: name.trim() || modelId.trim(),
         reasoning,
+        input: supportsImage ? ['text', 'image'] : ['text'],
       });
       onSaved(response.state, t('addModel.added', { ref: `${providerId}/${modelId.trim()}` }));
     } catch (caughtError) {
@@ -1293,10 +1296,16 @@ function AddCatalogModelModal({ providers, onClose, onSaved }: {
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('addModel.displayName')} <span className="font-normal text-surface-400">{t('common.optional')}</span></span>
               <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('addModel.namePlaceholder')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
             </label>
-            <label className="flex items-center gap-2 text-[12px] text-surface-600 dark:text-surface-300">
-              <input type="checkbox" checked={reasoning} onChange={(event) => setReasoning(event.target.checked)} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
-              {t('addModel.reasoning')}
-            </label>
+            <div className="flex flex-wrap gap-4 pt-1">
+              <label className="flex items-center gap-2 text-[12px] text-surface-600 dark:text-surface-300">
+                <input type="checkbox" checked={supportsImage} onChange={(event) => setSupportsImage(event.target.checked)} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
+                {t('addModel.supportsImage')}
+              </label>
+              <label className="flex items-center gap-2 text-[12px] text-surface-600 dark:text-surface-300">
+                <input type="checkbox" checked={reasoning} onChange={(event) => setReasoning(event.target.checked)} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
+                {t('addModel.reasoning')}
+              </label>
+            </div>
             {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
           </div>
           <div className="flex justify-end gap-3 border-t border-surface-100 bg-surface-50 p-5 dark:border-surface-800 dark:bg-surface-900/50">
