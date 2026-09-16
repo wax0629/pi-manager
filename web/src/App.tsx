@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   CircleAlert,
   Download,
+  GripVertical,
   KeyRound,
   LayoutDashboard,
   Loader2,
@@ -1734,6 +1735,8 @@ function CycleListEditor({
   const { t } = useI18n();
   const [draftRefs, setDraftRefs] = useState<string[]>(() => [...state.cycle.modelRefs]);
   const [query, setQuery] = useState('');
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -1774,6 +1777,18 @@ function CycleListEditor({
     setError('');
   };
 
+  const reorderModel = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    setDraftRefs((current) => {
+      if (fromIndex >= current.length || toIndex >= current.length) return current;
+      const next = [...current];
+      const [item] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, item);
+      return next;
+    });
+    setError('');
+  };
+
   const saveCycleList = async () => {
     if (draftRefs.length === 0 && !window.confirm(t('cycle.emptyConfirm'))) {
       return;
@@ -1807,29 +1822,80 @@ function CycleListEditor({
           </div>
         </div>
         <div className="divide-y divide-surface-100 dark:divide-surface-800/50">
-          {draftEntries.length > 0 ? draftEntries.map((entry, index) => (
-            <div key={`${entry.ref}-${index}`} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-surface-100 text-[11px] font-medium text-surface-600 dark:bg-surface-800 dark:text-surface-300">{index + 1}</span>
-                  <span className="font-mono text-[12px] font-medium text-surface-900 dark:text-white">{cycleEntryLabel(entry, t)}</span>
-                  {entry.valid ? (
-                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">{t('common.available')}</span>
-                  ) : (
-                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">{t('cycle.invalidReason', { reason: entry.reason })}</span>
-                  )}
+          {draftEntries.length > 0 ? draftEntries.map((entry, index) => {
+            const isDragging = draggedIndex === index;
+            const isDragOver = dragOverIndex === index;
+            return (
+              <div
+                key={`${entry.ref}-${index}`}
+                draggable
+                onDragStart={(e) => {
+                  setDraggedIndex(index);
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', String(index));
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dragOverIndex !== index) {
+                    setDragOverIndex(index);
+                  }
+                }}
+                onDragLeave={() => {
+                  if (dragOverIndex === index) {
+                    setDragOverIndex(null);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const sourceIdx = draggedIndex ?? Number(e.dataTransfer.getData('text/plain'));
+                  if (!Number.isNaN(sourceIdx)) {
+                    reorderModel(sourceIdx, index);
+                  }
+                  setDraggedIndex(null);
+                  setDragOverIndex(null);
+                }}
+                onDragEnd={() => {
+                  setDraggedIndex(null);
+                  setDragOverIndex(null);
+                }}
+                className={`flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 transition-all ${
+                  isDragging ? 'opacity-40 bg-surface-100/50 dark:bg-surface-800/30' : ''
+                } ${
+                  isDragOver ? 'border-t-2 border-primary-500 bg-primary-50/20 dark:bg-primary-500/10' : ''
+                }`}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <div
+                    className="cursor-grab active:cursor-grabbing text-surface-400 hover:text-surface-600 dark:text-surface-500 dark:hover:text-surface-300"
+                    title={t('cycle.dragToReorder')}
+                    aria-label={t('cycle.dragToReorder')}
+                  >
+                    <GripVertical size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-surface-100 text-[11px] font-medium text-surface-600 dark:bg-surface-800 dark:text-surface-300">{index + 1}</span>
+                      <span className="font-mono text-[12px] font-medium text-surface-900 dark:text-white">{cycleEntryLabel(entry, t)}</span>
+                      {entry.valid ? (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">{t('common.available')}</span>
+                      ) : (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">{t('cycle.invalidReason', { reason: entry.reason })}</span>
+                      )}
+                    </div>
+                    <div className="mt-1 text-[12px] text-surface-500">
+                      {entry.providerName} · {entry.modelName}
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-1 text-[12px] text-surface-500">
-                  {entry.providerName} · {entry.modelName}
+                <div className="flex items-center gap-1.5">
+                  <button type="button" onClick={() => moveModel(index, -1)} disabled={index === 0} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-surface-200 text-surface-500 hover:bg-surface-50 hover:text-surface-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white" aria-label={t('cycle.moveUp')}><ArrowUp size={14} /></button>
+                  <button type="button" onClick={() => moveModel(index, 1)} disabled={index === draftEntries.length - 1} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-surface-200 text-surface-500 hover:bg-surface-50 hover:text-surface-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white" aria-label={t('cycle.moveDown')}><ArrowDown size={14} /></button>
+                  <button type="button" onClick={() => removeModel(index)} className="inline-flex h-8 items-center rounded-md border border-surface-200 px-3 text-[12px] font-medium text-surface-500 hover:bg-surface-50 hover:text-surface-900 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white"><Trash2 size={13} className="mr-1.5" />{t('common.remove')}</button>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <button type="button" onClick={() => moveModel(index, -1)} disabled={index === 0} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-surface-200 text-surface-500 hover:bg-surface-50 hover:text-surface-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white" aria-label={t('cycle.moveUp')}><ArrowUp size={14} /></button>
-                <button type="button" onClick={() => moveModel(index, 1)} disabled={index === draftEntries.length - 1} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-surface-200 text-surface-500 hover:bg-surface-50 hover:text-surface-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white" aria-label={t('cycle.moveDown')}><ArrowDown size={14} /></button>
-                <button type="button" onClick={() => removeModel(index)} className="inline-flex h-8 items-center rounded-md border border-surface-200 px-3 text-[12px] font-medium text-surface-500 hover:bg-surface-50 hover:text-surface-900 dark:border-surface-700 dark:hover:bg-surface-800 dark:hover:text-white"><Trash2 size={13} className="mr-1.5" />{t('common.remove')}</button>
-              </div>
-            </div>
-          )) : (
+            );
+          }) : (
             <div className="px-5 py-10 text-center text-[13px] text-surface-500">
               {t('cycle.emptyList')}
             </div>
