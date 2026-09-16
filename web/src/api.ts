@@ -107,7 +107,7 @@ export async function deleteProviderCredential(providerId: string): Promise<Stat
   });
 }
 
-export async function addProviderModel(providerId: string, model: { id: string; name?: string; reasoning?: boolean }): Promise<StateResponse> {
+export async function addProviderModel(providerId: string, model: { id: string; name?: string; reasoning?: boolean; input?: string[] }): Promise<StateResponse> {
   return request<StateResponse>(`/api/providers/${encodeURIComponent(providerId)}/models`, {
     method: 'POST',
     body: JSON.stringify({ model }),

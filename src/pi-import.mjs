@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { inferModelInputs } from "./model-capabilities.mjs";
 
 const OPENAI_COMPAT_APIS = new Set(["openai-completions", "openai-responses"]);
 
@@ -41,7 +42,7 @@ export function summarizePiProvider(id, config) {
           name: String(model?.name || model?.id || "").trim(),
           reasoning: Boolean(model?.reasoning),
           thinkingLevelMap: model?.thinkingLevelMap && typeof model.thinkingLevelMap === "object" ? model.thinkingLevelMap : undefined,
-          input: Array.isArray(model?.input) ? model.input : ["text"],
+          input: inferModelInputs(model?.id, model?.input),
           contextWindow: model?.contextWindow,
           maxTokens: model?.maxTokens,
           cost: model?.cost

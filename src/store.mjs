@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { clone, createDefaultState } from "./defaults.mjs";
+import { inferModelInputs } from "./model-capabilities.mjs";
 import { previewPiProviderImport, summarizePiProvider, literalApiKeyFromPiProvider } from "./pi-import.mjs";
 import { deleteSecret, getSecret, hasSecret, setSecret } from "./secrets.mjs";
 import {
@@ -111,7 +112,7 @@ function normalizeModel(item) {
     thinkingLevelMap,
     thinkingMapSource: normalizeThinkingMapSource(source.thinkingMapSource),
     thinkingMapVerified: Boolean(source.thinkingMapVerified),
-    input: Array.isArray(source.input) && source.input.length ? source.input.map((item) => String(item)) : ["text"],
+    input: inferModelInputs(id, source.input),
     contextWindow: normalizeContextWindow(source.contextWindow),
     maxTokens: Number(source.maxTokens) || 32000,
     cost: source.cost || { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
