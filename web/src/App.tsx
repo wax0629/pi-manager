@@ -590,8 +590,20 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
   const [baseUrl, setBaseUrl] = useState(provider?.baseUrl || '');
   const [apiKey, setApiKey] = useState('');
   const [models, setModels] = useState(provider?.models.map((model) => model.id).join(', ') || '');
-  const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>([]);
-  const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
+  const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>(() => {
+    if (!provider?.models?.length) return [];
+    return provider.models.map((m) => ({
+      id: m.id,
+      name: m.name || m.id,
+      reasoning: Boolean(m.reasoning),
+      input: m.input || ['text'],
+      contextWindow: m.contextWindow,
+      maxTokens: m.maxTokens,
+    }));
+  });
+  const [selectedModelIds, setSelectedModelIds] = useState<string[]>(() => {
+    return provider?.models?.map((m) => m.id) || [];
+  });
   const [discoveryQuery, setDiscoveryQuery] = useState('');
   const [discovering, setDiscovering] = useState(false);
   const [discoveryError, setDiscoveryError] = useState('');
@@ -608,14 +620,35 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
     setDiscovering(true);
     setDiscoveryError('');
     try {
-      const response = await discoverProviderModels({ baseUrl: baseUrl.trim(), apiKey: apiKey.trim() || undefined });
+      const response = await discoverProviderModels({
+        baseUrl: baseUrl.trim(),
+        apiKey: apiKey.trim() || undefined,
+        providerId: provider?.id,
+      });
       if (!response.result.ok) {
         setDiscoveryError(t('editor.discoverPartial', { message: response.result.message }));
         return;
       }
-      setDiscoveredModels(response.result.models);
-      setSelectedModelIds(response.result.models.map((model) => model.id));
-      setModels(response.result.models.map((model) => model.id).join(', '));
+
+      // Merge newly discovered models with existing/already selected models
+      const existingMap = new Map(discoveredModels.map((m) => [m.id, m]));
+      const nextDiscovered: DiscoveredModel[] = [...discoveredModels];
+
+      for (const model of response.result.models) {
+        if (!existingMap.has(model.id)) {
+          nextDiscovered.push(model);
+          existingMap.set(model.id, model);
+        }
+      }
+
+      // Preserve previously selected models, and if brand new creation, select all
+      const nextSelected = editing
+        ? Array.from(new Set([...selectedModelIds]))
+        : response.result.models.map((m) => m.id);
+
+      setDiscoveredModels(nextDiscovered);
+      setSelectedModelIds(nextSelected);
+      setModels(nextSelected.join(', '));
     } catch (caughtError) {
       setDiscoveryError(caughtError instanceof ApiError ? caughtError.message : t('editor.discoverFailed'));
     } finally {
@@ -633,6 +666,14 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
     if (patch.id !== undefined && patch.id !== modelId) {
       setSelectedModelIds((current) => current.map((id) => id === modelId ? patch.id! : id));
     }
+  };
+
+  const toggleModelSelection = (modelId: string, checked: boolean) => {
+    const nextSelected = checked
+      ? [...selectedModelIds, modelId]
+      : selectedModelIds.filter((id) => id !== modelId);
+    setSelectedModelIds(nextSelected);
+    setModels(nextSelected.join(', '));
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -727,13 +768,20 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
               {discoveredModels.length > 0 && <div className="space-y-2 rounded-md border border-surface-200 p-2 dark:border-surface-700">
                 <div className="flex items-center gap-2">
                   <input value={discoveryQuery} onChange={(event) => setDiscoveryQuery(event.target.value)} placeholder={t('editor.searchUpstream')} className="min-w-0 flex-1 rounded border border-surface-200 bg-surface-50 px-2 py-1.5 text-[12px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
-                  <button type="button" onClick={() => setSelectedModelIds(visibleDiscoveredModels.map((model) => model.id))} className="shrink-0 text-[11px] text-primary-600 hover:underline dark:text-primary-400">{t('common.selectAll')}</button>
-                  <button type="button" onClick={() => setSelectedModelIds([])} className="shrink-0 text-[11px] text-surface-500 hover:underline">{t('common.clear')}</button>
+                  <button type="button" onClick={() => {
+                    const allIds = visibleDiscoveredModels.map((model) => model.id);
+                    setSelectedModelIds(allIds);
+                    setModels(allIds.join(', '));
+                  }} className="shrink-0 text-[11px] text-primary-600 hover:underline dark:text-primary-400">{t('common.selectAll')}</button>
+                  <button type="button" onClick={() => {
+                    setSelectedModelIds([]);
+                    setModels('');
+                  }} className="shrink-0 text-[11px] text-surface-500 hover:underline">{t('common.clear')}</button>
                 </div>
                 <div className="max-h-48 space-y-1 overflow-y-auto">
                 {visibleDiscoveredModels.map((model) => (
                   <div key={model.id} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-surface-50 dark:hover:bg-surface-800/60">
-                    <input type="checkbox" checked={selectedModelIds.includes(model.id)} onChange={(event) => setSelectedModelIds((current) => event.target.checked ? [...current, model.id] : current.filter((id) => id !== model.id))} aria-label={t('editor.selectModel', { id: model.id })} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
+                    <input type="checkbox" checked={selectedModelIds.includes(model.id)} onChange={(event) => toggleModelSelection(model.id, event.target.checked)} aria-label={t('editor.selectModel', { id: model.id })} className="h-3.5 w-3.5 rounded border-surface-300 text-primary-600 focus:ring-primary-500" />
                     <input value={model.id} onChange={(event) => updateDiscoveredModel(model.id, { id: event.target.value })} aria-label={t('editor.modelIdAria', { id: model.id })} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 font-mono text-[12px] text-surface-900 outline-none focus:border-surface-300 focus:bg-white dark:text-white dark:focus:border-surface-600 dark:focus:bg-surface-950" />
                     <input value={model.name} onChange={(event) => updateDiscoveredModel(model.id, { name: event.target.value })} aria-label={t('editor.modelNameAria', { id: model.id })} className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 text-[12px] text-surface-700 outline-none focus:border-surface-300 focus:bg-white dark:text-surface-200 dark:focus:border-surface-600 dark:focus:bg-surface-950" />
                     <label className="flex shrink-0 items-center gap-1 text-[10px] text-surface-400" title={t('editor.thinkingHint')}><input type="checkbox" checked={model.reasoning} onChange={(event) => updateDiscoveredModel(model.id, { reasoning: event.target.checked })} aria-label={t('editor.thinkingAria', { id: model.id })} />{t('common.thinking')}</label>

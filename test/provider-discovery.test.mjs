@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { discoverProviderModels, normalizeModels } from "../src/provider-discovery.mjs";
 
@@ -103,4 +106,34 @@ test("returns actionable errors for auth, missing endpoint and invalid JSON", as
   });
   assert.equal(invalid.category, "protocol");
   assert.match(invalid.message, /有效 JSON/);
+});
+
+test("server falls back to saved provider credential for discovery when apiKey is omitted", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "store-discover-test-"));
+  const store = (await import("../src/store.mjs")).createStore({ projectRoot: root, dataDir: root });
+  store.addProvider({
+    id: "relay-saved",
+    name: "Relay Saved",
+    baseUrl: "https://relay.example.test/v1",
+    models: ["model-a"],
+    apiKey: "saved-key"
+  });
+
+  const provider = store.provider("relay-saved");
+  assert.equal(store.credential(provider), "saved-key");
+
+  let authHeader = "";
+  const result = await discoverProviderModels({
+    baseUrl: "https://relay.example.test/v1",
+    apiKey: store.credential(provider),
+    fetchImpl: async (_url, init) => {
+      authHeader = init?.headers?.authorization || "";
+      return response({ data: [{ id: "model-discovered" }] });
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(authHeader, "Bearer saved-key");
+  assert.equal(result.models[0].id, "model-discovered");
+  fs.rmSync(root, { recursive: true, force: true });
 });
