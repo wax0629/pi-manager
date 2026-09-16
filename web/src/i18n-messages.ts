@@ -288,7 +288,7 @@ export const zh: Record<string, string> = {
   'live.noBackup': '没有可回滚的本机 Pi 备份。',
   'live.rolledBack': '已回滚本机 Pi 配置',
   'live.rollbackFailed': '回滚本机 Pi 失败。',
-  'live.driftWarning': '检测到���机 ~/.pi/agent/settings.json 循环列表缺失 {count} 个模型（可能被正在运行的 Pi 会话覆盖写回）：{missing}',
+  'live.driftWarning': '检测到本机 ~/.pi/agent/settings.json 循环列表缺失 {count} 个模型（可能被正在运行的 Pi 会话覆盖写回）：{missing}',
   'live.driftSyncAction': '立即重新同步到本机 Pi',
   'live.driftSynced': '本机 Pi 循环列表已完全同步（{count} 个模型）',
   'live.title': '导入本机 Pi',
