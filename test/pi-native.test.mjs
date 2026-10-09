@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { createNativeAuth, FEATURED_NATIVE_PROVIDERS } from "../src/pi-native.mjs";
 
-function fakeSdk({ providers, loginImpl }) {
+function fakeSdk({ providers, loginImpl, refreshImpl, onCreate }) {
   return {
     ModelRuntime: {
-      async create() {
+      async create(options) {
+        onCreate?.(options);
         return {
           getProviders: () => providers,
           getProvider: (id) => providers.find((provider) => provider.id === id),
@@ -20,6 +23,7 @@ function fakeSdk({ providers, loginImpl }) {
             .filter((provider) => provider.configured)
             .map((provider) => ({ providerId: provider.id, type: "oauth" })),
           login: loginImpl,
+          refresh: refreshImpl,
           logout: async (providerId) => {
             const provider = providers.find((item) => item.id === providerId);
             if (provider) provider.configured = false;
@@ -58,6 +62,84 @@ test("default native listing only shows configured providers", async () => {
   });
   const providers = await nativeAuth.listNativeProviders();
   assert.equal(providers.some((provider) => provider.id === "openai-codex"), false);
+});
+
+test("native runtime restores Pi's local catalog and auth without a network refresh", async () => {
+  const agentDir = path.join(os.tmpdir(), "pi-manager-native-cache-test");
+  const nativeAuth = createNativeAuth({
+    agentDir,
+    loadSdk: async () => fakeSdk({
+      providers: [{ ...openaiCodex, configured: true }],
+      onCreate(options) {
+        assert.equal(options.refreshOnCreate, true);
+        assert.equal(options.allowModelNetwork, false);
+        assert.equal(options.modelsPath, path.join(agentDir, "models.json"));
+        assert.equal(options.authPath, path.join(agentDir, "auth.json"));
+      },
+      refreshImpl: async () => assert.fail("ordinary reads must not fetch models")
+    })
+  });
+  assert.equal((await nativeAuth.listNativeProviders())[0].credentialConfigured, true);
+});
+
+test("explicit refresh reloads the runtime, bypasses catalog freshness and returns new models", async () => {
+  let creates = 0;
+  let refreshes = 0;
+  const nativeAuth = createNativeAuth({
+    loadSdk: async () => {
+      const providers = [{ ...openaiCodex, configured: true, models: [...openaiCodex.models] }];
+      return fakeSdk({
+        providers,
+        onCreate: () => { creates += 1; },
+        refreshImpl: async (options) => {
+          refreshes += 1;
+          assert.equal(options.allowNetwork, process.env.PI_OFFLINE === undefined);
+          assert.equal(options.force, true);
+          assert.deepEqual(options.providers, ["openai-codex"]);
+          assert.equal(options.signal instanceof AbortSignal, true);
+          providers[0].models.push({ id: "gpt-6.1-sol", name: "GPT-6.1 Sol", reasoning: true });
+          return { aborted: false, errors: new Map() };
+        }
+      });
+    }
+  });
+  const before = await nativeAuth.listNativeProviders();
+  assert.equal(before[0].models.some((model) => model.id === "gpt-6.1-sol"), false);
+  const results = await Promise.all([
+    nativeAuth.listNativeProviders({ refresh: true }),
+    nativeAuth.listNativeProviders({ refresh: true })
+  ]);
+  assert.equal(creates, 2);
+  assert.equal(refreshes, 1);
+  for (const providers of results) {
+    assert.equal(providers[0].models.some((model) => model.id === "gpt-6.1-sol"), true);
+  }
+});
+
+test("explicit refresh reports catalog failures and timeouts instead of claiming success", async () => {
+  const outcomes = [
+    { result: { aborted: false, errors: new Map([["openai-codex", new Error("network unavailable")]]) }, message: /刷新失败: openai-codex/ },
+    { result: { aborted: true, errors: new Map() }, message: /刷新超时/ }
+  ];
+  for (const { result, message } of outcomes) {
+    const nativeAuth = createNativeAuth({
+      loadSdk: async () => fakeSdk({ providers: [{ ...openaiCodex, configured: true }], refreshImpl: async () => result })
+    });
+    await assert.rejects(() => nativeAuth.listNativeProviders({ refresh: true }), message);
+    assert.equal((await nativeAuth.listNativeProviders()).length, 1);
+  }
+});
+
+test("native runtime initialization can recover after a failed SDK load", async () => {
+  let attempts = 0;
+  const nativeAuth = createNativeAuth({
+    loadSdk: async () => {
+      if (++attempts === 1) throw new Error("temporary SDK load failure");
+      return fakeSdk({ providers: [{ ...openaiCodex, configured: true }] });
+    }
+  });
+  await assert.rejects(() => nativeAuth.listNativeProviders(), /temporary SDK load failure/);
+  assert.equal((await nativeAuth.listNativeProviders()).length, 1);
 });
 
 test("models.json providers are not treated as native subscription cards", async () => {

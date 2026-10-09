@@ -72,6 +72,7 @@ export function createNativeAuth({
   openUrl
 } = {}) {
   let runtimePromise;
+  let refreshPromise;
   const sessions = new Map();
 
   function resetRuntime() {
@@ -84,17 +85,47 @@ export function createNativeAuth({
         const sdk = loadSdk ? await loadSdk() : await loadPiSdk(executable);
         if (!sdk?.ModelRuntime?.create) throw new Error("当前 Pi SDK 不支持 ModelRuntime");
         return sdk.ModelRuntime.create({
-          refreshOnCreate: false,
+          refreshOnCreate: true,
           allowModelNetwork: false,
           authPath: path.join(agentDir, "auth.json"),
-          modelsPath: fs.existsSync(path.join(agentDir, "models.json")) ? path.join(agentDir, "models.json") : null
+          modelsPath: path.join(agentDir, "models.json")
         });
-      })();
+      })().catch((error) => {
+        resetRuntime();
+        throw error;
+      });
     }
     return runtimePromise;
   }
 
-  async function listNativeProviders({ featured = false } = {}) {
+  async function refreshModels() {
+    if (!refreshPromise) {
+      refreshPromise = (async () => {
+        // Reload credentials/config and restore Pi's catalog cache before fetching.
+        resetRuntime();
+        const runtime = await getRuntime();
+        if (typeof runtime.refresh !== "function") throw new Error("当前 Pi SDK 不支持模型刷新，请更新 Pi");
+        const configured = new Set((await runtime.listCredentials?.() || []).map((item) => item.providerId));
+        const providers = runtime.getProviders()
+          .filter((provider) => FEATURED_NATIVE_PROVIDERS.includes(provider.id)
+            && providerAuthMethods(provider).length > 0
+            && (configured.has(provider.id) || runtime.getProviderAuthStatus?.(provider.id)?.configured))
+          .map((provider) => provider.id);
+        const result = await runtime.refresh({
+          allowNetwork: process.env.PI_OFFLINE === undefined,
+          force: true,
+          providers,
+          signal: AbortSignal.timeout(15000)
+        });
+        if (result?.aborted) throw new Error("Pi 原生模型刷新超时，请稍后重试");
+        if (result?.errors?.size) throw new Error(`Pi 原生模型刷新失败: ${[...result.errors.keys()].join(" / ")}`);
+      })().finally(() => { refreshPromise = undefined; });
+    }
+    return refreshPromise;
+  }
+
+  async function listNativeProviders({ featured = false, refresh = false } = {}) {
+    if (refresh) await refreshModels();
     const runtime = await getRuntime();
     const configured = new Set((await runtime.listCredentials?.() || []).map((item) => item.providerId));
     const featuredIds = new Set(FEATURED_NATIVE_PROVIDERS);

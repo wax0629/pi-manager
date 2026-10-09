@@ -524,12 +524,34 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
     },
     upsertNativeProvider(summary) {
       const existing = store.provider(summary.id);
-      const models = mergeProviderModels(summary.models || [], existing?.models || []);
+      const existingModels = new Map((existing?.models || []).map((model) => [model.id, model]));
+      const incomingModels = (summary.models || []).map((model) => {
+        const previous = existingModels.get(model.id);
+        if (!previous) return model;
+        return {
+          ...model,
+          // Context has no source marker; keep the saved per-model setting.
+          contextWindow: previous.contextWindow,
+          ...(previous.thinkingMapSource !== "provider-default" ? {
+            thinkingLevelMap: previous.thinkingLevelMap,
+            thinkingMapSource: previous.thinkingMapSource,
+            thinkingMapVerified: previous.thinkingMapVerified
+          } : {})
+        };
+      });
+      const models = mergeProviderModels(incomingModels, existing?.models || []);
       if (existing) {
         if (existing.kind === "native-subscription") {
-          existing.name = summary.name || existing.name;
-          existing.piProvider = summary.piProvider || existing.piProvider || existing.id;
-          if (models.length) existing.models = models;
+          const next = {
+            ...existing,
+            name: summary.name || existing.name,
+            piProvider: summary.piProvider || existing.piProvider || existing.id,
+            models: models.length ? models : existing.models
+          };
+          if (JSON.stringify(next) !== JSON.stringify(existing)) {
+            Object.assign(existing, next);
+            store.touchConfiguration();
+          }
         }
         return existing;
       }
