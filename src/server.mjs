@@ -174,7 +174,7 @@ async function bridgeStatus(provider) {
 }
 
 function detectPi(providerId = "openai-codex", { force = false } = {}) {
-  if (!piInfo) {
+  if (!piInfo || force) {
     const detected = { installed: false, path: piExecutable, version: "" };
     try {
       detected.version = execFileSync(piExecutable, ["--version"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -244,31 +244,30 @@ async function providerPublicState(provider, { forceAuth = false, nativeSummary 
   };
 }
 
-async function mergeNativeProviders(providers) {
+async function syncNativeProviders({ refreshModels = false, auth = nativeAuth } = {}) {
+  if (!store.get().providers.some((provider) => provider.kind === "native-subscription")) return [];
   let nativeSummaries = [];
   try {
-    nativeSummaries = await nativeAuth.listNativeProviders();
-  } catch {
-    return providers;
+    nativeSummaries = await auth.listNativeProviders({ refresh: refreshModels });
+  } catch (error) {
+    if (refreshModels) throw error;
+    return [];
   }
-  return providers.map((provider) => {
-    const summary = nativeSummaries.find((item) => item.id === provider.id);
-    if (!summary || provider.kind !== "native-subscription") return provider;
-    return {
-      ...provider,
-      credentialConfigured: summary.credentialConfigured,
-      status: summary.credentialConfigured ? "ready" : provider.status,
-      detail: summary.authLabel || provider.detail,
-      authMethods: summary.authMethods
-    };
-  });
+  for (const summary of nativeSummaries) {
+    if (store.provider(summary.id)?.kind === "native-subscription") store.upsertNativeProvider(summary);
+  }
+  return nativeSummaries;
 }
 
-async function publicState({ forceAuth = false } = {}) {
+async function publicState({ forceAuth = false, refreshModels = false, auth = nativeAuth } = {}) {
+  const nativeSummaries = await syncNativeProviders({ refreshModels, auth });
   const current = store.get();
-  const providers = await mergeNativeProviders(
-    await Promise.all(current.providers.map((provider) => providerPublicState(provider, { forceAuth })))
-  );
+  const providers = await Promise.all(current.providers.map((provider) => {
+    const nativeSummary = provider.kind === "native-subscription"
+      ? nativeSummaries.find((summary) => summary.id === provider.id)
+      : null;
+    return providerPublicState({ ...provider, ...(nativeSummary ? { authMethods: nativeSummary.authMethods } : {}) }, { forceAuth, nativeSummary });
+  }));
   const activeProvider = providers.find((provider) => provider.id === current.active.providerId);
   const activeModel = activeProvider?.models.find((model) => model.id === current.active.modelId);
   const gatewayStats = gateway.getStats();
@@ -456,7 +455,7 @@ const gateway = createGateway({
 
 async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
   if (req.method === "GET" && pathname === "/api/state") {
-    sendJson(res, 200, await publicState({ forceAuth }));
+    sendJson(res, 200, await publicState({ forceAuth, refreshModels: forceAuth }));
     return;
   }
   if (req.method === "GET" && pathname === "/api/events") {

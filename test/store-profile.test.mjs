@@ -19,6 +19,41 @@ function makeFixture(t) {
   };
 }
 
+test("native catalog refresh persists new models and preserves saved model controls", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  const summary = {
+    id: "openai-codex", name: "OpenAI Codex", piProvider: "openai-codex",
+    models: [{ id: "gpt-6-astra", reasoning: true, contextWindow: 272000, thinkingLevelMap: { max: "max", xhigh: "xhigh" } }]
+  };
+  store.upsertNativeProvider(summary);
+  store.setActive({ providerId: summary.id, modelId: "gpt-6-astra", thinking: "max" });
+  store.updateCycleList(["openai-codex/gpt-6-astra"]);
+  store.updateThinkingMap({ providerId: summary.id, modelId: "gpt-6-astra", thinkingLevelMap: { max: "custom-max", xhigh: "custom-high" }, source: "user", verified: true });
+  store.updateModelContextWindow({ providerId: summary.id, modelId: "gpt-6-astra", contextWindow: 500000 });
+  const active = { ...store.get().active };
+  const cycle = { ...store.get().cycle };
+  const revision = store.get().runtime.configRevision;
+  const refreshed = { ...summary, models: [...summary.models, { id: "gpt-6.1-sol", reasoning: true, contextWindow: 1050000, thinkingLevelMap: { max: "max", xhigh: "xhigh" } }] };
+  store.upsertNativeProvider(refreshed);
+  assert.equal(store.get().runtime.configRevision, revision + 1);
+  assert.deepEqual(store.get().active, active);
+  assert.deepEqual(store.get().cycle, cycle);
+  const reloaded = createStore(fixture);
+  const astra = reloaded.provider(summary.id).models.find((model) => model.id === "gpt-6-astra");
+  assert.equal(astra.contextWindow, 500000);
+  assert.equal(astra.thinkingLevelMap.max, "custom-max");
+  assert.equal(astra.thinkingMapSource, "user");
+  assert.equal(astra.thinkingMapVerified, true);
+  assert.equal(reloaded.provider(summary.id).models.some((model) => model.id === "gpt-6.1-sol"), true);
+  reloaded.setActive({ providerId: summary.id, modelId: "gpt-6.1-sol", thinking: "max" });
+  assert.equal(reloaded.get().active.modelId, "gpt-6.1-sol");
+  store.upsertNativeProvider(refreshed);
+  store.upsertNativeProvider({ ...summary, models: [] });
+  assert.equal(store.get().runtime.configRevision, revision + 1);
+  assert.equal(store.provider(summary.id).models.length, 2);
+});
+
 test("new stores start without providers, cycle entries, or an active route", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
