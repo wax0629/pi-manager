@@ -38,6 +38,39 @@ function providerAuthMethods(provider) {
   return methods;
 }
 
+function safeHttpsUrl(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    return url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function positiveSeconds(value) {
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
+}
+
+// xAI subscription login never calls prompt(). It emits a device_code
+// notification, then polls until the browser approval finishes. The OAuth
+// device secret stays inside Pi; only the user code and https verification
+// URL are safe to show and open.
+function noteDeviceCode(session, event, openUrl) {
+  const userCode = String(event?.userCode || event?.user_code || "").trim();
+  const verificationUri = safeHttpsUrl(event?.verificationUri || event?.verification_uri || "");
+  const expiresInSeconds = positiveSeconds(event?.expiresInSeconds ?? event?.expires_in);
+  if (!userCode && !verificationUri) return false;
+  if (userCode) session.userCode = userCode;
+  if (verificationUri) session.authUrl = verificationUri;
+  if (expiresInSeconds) session.expiresInSeconds = expiresInSeconds;
+  session.status = userCode ? "need_device_code" : "need_url";
+  if (verificationUri && typeof openUrl === "function") {
+    Promise.resolve(openUrl(verificationUri)).catch(() => {});
+  }
+  return true;
+}
+
 function summarizeNativeProvider(runtime, provider) {
   const status = runtime.getProviderAuthStatus?.(provider.id) || { configured: false };
   return {
@@ -116,15 +149,19 @@ export function createNativeAuth({
   }
 
   function publicSession(session) {
-    return {
+    const view = {
       loginId: session.id,
       providerId: session.providerId,
       type: session.type,
       status: session.status,
       authUrl: session.authUrl,
+      userCode: session.userCode || "",
       prompt: session.prompt,
       error: session.error
     };
+    const expiresInSeconds = positiveSeconds(session.expiresInSeconds);
+    if (expiresInSeconds) view.expiresInSeconds = expiresInSeconds;
+    return view;
   }
 
   async function login({ providerId, type, apiKey = "" }) {
@@ -155,6 +192,8 @@ export function createNativeAuth({
       type: "oauth",
       status: "pending",
       authUrl: "",
+      userCode: "",
+      expiresInSeconds: 0,
       prompt: null,
       error: "",
       resolvePrompt: null
@@ -174,7 +213,11 @@ export function createNativeAuth({
         });
       },
       notify(event) {
-        if (event.type === "auth_url" && event.url) {
+        if (event?.type === "device_code") {
+          noteDeviceCode(session, event, openUrl);
+          return;
+        }
+        if (event?.type === "auth_url" && event.url) {
           session.authUrl = event.url;
           session.status = "need_url";
           if (typeof openUrl === "function") {
@@ -186,11 +229,9 @@ export function createNativeAuth({
       session.status = "completed";
       session.prompt = null;
       resetRuntime();
-      return publicSession(session);
     }).catch((error) => {
       session.status = "error";
       session.error = error instanceof Error ? error.message : String(error);
-      throw error;
     });
 
     return publicSession(session);
@@ -210,7 +251,7 @@ export function createNativeAuth({
 
   async function loginStatus(loginId) {
     const session = getSession(loginId);
-    if (session.promise && session.status === "pending") {
+    if (session.promise && session.status !== "completed" && session.status !== "error" && session.status !== "need_prompt") {
       try {
         await Promise.race([session.promise, new Promise((resolve) => setTimeout(resolve, 20))]);
       } catch {
