@@ -186,8 +186,10 @@ export interface NativeLoginState {
   loginId?: string;
   providerId: string;
   type: 'oauth' | 'api_key';
-  status: 'pending' | 'need_url' | 'need_prompt' | 'completed' | 'error';
+  status: 'pending' | 'need_url' | 'need_device_code' | 'need_prompt' | 'completed' | 'error';
   authUrl?: string;
+  userCode?: string;
+  expiresInSeconds?: number;
   prompt?: { type: string; message: string; placeholder?: string; options?: Array<{ id: string; label: string }> } | null;
   error?: string;
 }

@@ -6,6 +6,7 @@ import {
   Boxes,
   CheckCircle2,
   CircleAlert,
+  Copy,
   Download,
   GripVertical,
   KeyRound,
@@ -948,6 +949,7 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
   const [apiKey, setApiKey] = useState('');
   const [promptValue, setPromptValue] = useState('');
   const [login, setLogin] = useState<NativeLoginState | null>(null);
+  const [codeCopied, setCodeCopied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [featured, setFeatured] = useState<ProviderState[]>([]);
@@ -962,6 +964,7 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
       setLogin(null);
       setApiKey('');
       setPromptValue('');
+      setCodeCopied(false);
       setError('');
       setSubmitting(false);
       setSelectedProvider(provider || null);
@@ -1113,6 +1116,36 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
               {t('login.openBrowser')}
             </button>
           )}
+          {login?.userCode && (
+            <div className="space-y-2 rounded-md border border-surface-200 px-3 py-3 text-[12px] dark:border-surface-800">
+              <div className="text-surface-500">{t('login.deviceCode')}</div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="font-mono text-[22px] font-semibold tracking-[0.18em] text-surface-900 dark:text-white">{login.userCode}</div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const write = navigator.clipboard?.writeText?.(login.userCode || '');
+                    if (!write) {
+                      setError(t('login.copyFailed'));
+                      return;
+                    }
+                    void write.then(() => {
+                      setCodeCopied(true);
+                      window.setTimeout(() => setCodeCopied(false), 1500);
+                    }).catch(() => setError(t('login.copyFailed')));
+                  }}
+                  className="inline-flex h-8 shrink-0 items-center rounded-md border border-surface-200 px-2.5 text-[12px] font-medium text-surface-700 hover:bg-surface-50 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-900"
+                >
+                  <Copy size={13} className="mr-1.5" />
+                  {codeCopied ? t('login.copied') : t('login.copyCode')}
+                </button>
+              </div>
+              {typeof login.expiresInSeconds === 'number' && login.expiresInSeconds > 0 && (
+                <div className="text-surface-500">{t('login.deviceExpires', { minutes: Math.max(1, Math.ceil(login.expiresInSeconds / 60)) })}</div>
+              )}
+              <div className="leading-5 text-surface-500">{t('login.deviceHint')}</div>
+            </div>
+          )}
           {login?.authUrl && (
             <div className="space-y-2 rounded-md border border-surface-200 px-3 py-2 text-[12px] dark:border-surface-800">
               <div className="text-surface-500">{t('login.opened')}</div>
@@ -1138,7 +1171,7 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
               </button>
             </form>
           )}
-          {login?.status === 'pending' && <div className="flex items-center text-[12px] text-surface-500"><Loader2 size={14} className="mr-2 animate-spin" />{t('login.waiting')}</div>}
+          {(login?.status === 'pending' || login?.status === 'need_device_code') && <div className="flex items-center text-[12px] text-surface-500"><Loader2 size={14} className="mr-2 animate-spin" />{t(login.status === 'need_device_code' ? 'login.deviceWaiting' : 'login.waiting')}</div>}
           {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
         </div>
       </div>
