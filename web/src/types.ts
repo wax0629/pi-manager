@@ -39,6 +39,7 @@ export interface ProviderState {
   status: ProviderStatus;
   detail: string;
   authMethods?: Array<'oauth' | 'api_key'>;
+  authMethodLabels?: Partial<Record<'oauth' | 'api_key', string>>;
   models: ModelDefinition[];
 }
 

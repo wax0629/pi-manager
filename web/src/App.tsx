@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   Activity,
   ArrowDown,
@@ -28,7 +28,8 @@ import {
   createProvider,
   discoverProviderModels,
   importPiProviders,
-  listFeaturedNativeProviders,
+  listNativeLoginProviders,
+  cancelNativeLogin,
   previewPiImport,
   deleteProvider,
   deleteProviderModel,
@@ -591,6 +592,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
   const [baseUrl, setBaseUrl] = useState(provider?.baseUrl || '');
   const [apiKey, setApiKey] = useState('');
   const [models, setModels] = useState(provider?.models.map((model) => model.id).join(', ') || '');
+  const [modelInputMode, setModelInputMode] = useState<'catalog' | 'manual'>(provider?.models?.length ? 'catalog' : 'manual');
   const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>(() => {
     if (!provider?.models?.length) return [];
     return provider.models.map((m) => ({
@@ -648,8 +650,11 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
         : response.result.models.map((m) => m.id);
 
       setDiscoveredModels(nextDiscovered);
-      setSelectedModelIds(nextSelected);
-      setModels(nextSelected.join(', '));
+      if (!editing || modelInputMode === 'catalog') {
+        setSelectedModelIds(nextSelected);
+        setModels(nextSelected.join(', '));
+        setModelInputMode('catalog');
+      }
     } catch (caughtError) {
       setDiscoveryError(caughtError instanceof ApiError ? caughtError.message : t('editor.discoverFailed'));
     } finally {
@@ -675,10 +680,27 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
       : selectedModelIds.filter((id) => id !== modelId);
     setSelectedModelIds(nextSelected);
     setModels(nextSelected.join(', '));
+    setModelInputMode('catalog');
+    setError('');
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!name.trim()) {
+      setError(t('editor.needName'));
+      return;
+    }
+    if (id.trim() && !/^[A-Za-z0-9_-]+$/.test(id.trim())) {
+      setError(t('editor.idPattern'));
+      return;
+    }
+    try {
+      const url = new URL(baseUrl.trim());
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error('invalid protocol');
+    } catch {
+      setError(t('editor.invalidBaseUrl'));
+      return;
+    }
     const modelIds = models.split(',').map((model) => model.trim()).filter(Boolean);
     const selectedModels = discoveredModels
       .filter((model) => selectedModelIds.includes(model.id) && model.id.trim())
@@ -690,14 +712,15 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
         ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
         ...(model.maxTokens ? { maxTokens: model.maxTokens } : {})
       }));
-    if (discoveredModels.length > 0 && selectedModels.length === 0) {
+    if (modelInputMode === 'catalog' && selectedModels.length === 0) {
       setError(t('editor.needSelection'));
       return;
     }
-    if (discoveredModels.length === 0 && modelIds.length === 0) {
+    if (modelInputMode === 'manual' && modelIds.length === 0) {
       setError(t('editor.needModelId'));
       return;
     }
+    const submittedModels = modelInputMode === 'catalog' ? selectedModels : modelIds;
     setSubmitting(true);
     setError('');
     try {
@@ -706,7 +729,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
           id: id.trim() || undefined,
           name: name.trim(),
           baseUrl: baseUrl.trim(),
-          models: discoveredModels.length > 0 ? selectedModels : modelIds,
+          models: submittedModels,
           apiKey: apiKey.trim() || undefined,
         });
         onSaved(response.state, t('editor.updated'));
@@ -716,7 +739,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
           name: name.trim(),
           baseUrl: baseUrl.trim(),
           kind: 'openai-api',
-          models: discoveredModels.length > 0 ? selectedModels : modelIds,
+          models: submittedModels,
           apiKey: apiKey.trim() || undefined,
         };
         const response = await createProvider(input);
@@ -741,7 +764,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
           <button type="button" onClick={onClose} disabled={submitting} title={t('common.close')} aria-label={t('common.close')} className="text-surface-400 transition-colors hover:text-surface-900 disabled:opacity-50 dark:hover:text-white"><X size={18} /></button>
         </div>
 
-        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+        <form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('editor.displayName')}</span>
@@ -773,10 +796,14 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
                     const allIds = visibleDiscoveredModels.map((model) => model.id);
                     setSelectedModelIds(allIds);
                     setModels(allIds.join(', '));
+                    setModelInputMode('catalog');
+                    setError('');
                   }} className="shrink-0 text-[11px] text-primary-600 hover:underline dark:text-primary-400">{t('common.selectAll')}</button>
                   <button type="button" onClick={() => {
                     setSelectedModelIds([]);
                     setModels('');
+                    setModelInputMode('catalog');
+                    setError('');
                   }} className="shrink-0 text-[11px] text-surface-500 hover:underline">{t('common.clear')}</button>
                 </div>
                 <div className="max-h-48 space-y-1 overflow-y-auto">
@@ -792,7 +819,7 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
                 {visibleDiscoveredModels.length === 0 && <p className="px-2 py-3 text-[11px] text-surface-500">{t('editor.noUpstreamMatch')}</p>}
                 </div>
               </div>}
-              <input value={models} onChange={(event) => { setModels(event.target.value); setSelectedModelIds([]); }} placeholder={t('editor.manualPlaceholder')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
+              <input value={models} onChange={(event) => { setModels(event.target.value); setSelectedModelIds([]); setModelInputMode('manual'); setError(''); }} placeholder={t('editor.manualPlaceholder')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] text-surface-900 outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
               {discoveryError && <p className="text-[11px] leading-4 text-amber-600 dark:text-amber-400">{discoveryError}</p>}
             </div>
             <label className="block space-y-1.5">
@@ -803,14 +830,16 @@ function ProviderEditorModal({ provider, isOpen, onClose, onSaved }: {
               </div>
               <p className="text-[11px] text-surface-500">{t('editor.keyHint')}</p>
             </label>
-            {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
           </div>
-          <div className="flex justify-end gap-3 border-t border-surface-100 bg-surface-50 p-5 dark:border-surface-800 dark:bg-surface-900/50">
-            <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 transition-colors hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">{t('common.cancel')}</button>
-            <button type="submit" disabled={submitting} className="flex items-center rounded-md bg-surface-950 px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-surface-800 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-surface-950 dark:hover:bg-surface-200">
-              {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
-              {t('common.saveCandidate')}
-            </button>
+          <div className="space-y-3 border-t border-surface-100 bg-surface-50 p-5 dark:border-surface-800 dark:bg-surface-900/50">
+            {error && <div role="alert" className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={onClose} disabled={submitting} className="rounded-md px-4 py-2 text-[13px] font-medium text-surface-600 transition-colors hover:text-surface-900 disabled:opacity-50 dark:text-surface-400 dark:hover:text-white">{t('common.cancel')}</button>
+              <button type="submit" disabled={submitting} className="flex items-center rounded-md bg-surface-950 px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-surface-800 disabled:cursor-wait disabled:opacity-60 dark:bg-white dark:text-surface-950 dark:hover:bg-surface-200">
+                {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
+                {t('common.saveCandidate')}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -945,96 +974,81 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
 }) {
   const { t } = useI18n();
   const [authType, setAuthType] = useState<'oauth' | 'api_key'>('oauth');
-  const [apiKey, setApiKey] = useState('');
-  const [promptValue, setPromptValue] = useState('');
+  const [promptInput, setPromptInput] = useState({ id: '', value: '' });
   const [login, setLogin] = useState<NativeLoginState | null>(null);
+  const promptValue = promptInput.id === login?.prompt?.id ? promptInput.value : '';
+  const setPromptValue = (value: string) => setPromptInput({ id: login?.prompt?.id || '', value });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [featured, setFeatured] = useState<ProviderState[]>([]);
-  const [featuredLoading, setFeaturedLoading] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<ProviderState | null>(provider || null);
-  const methods = (selectedProvider || provider)?.authMethods?.length
-    ? (selectedProvider || provider)!.authMethods!
-    : (['oauth', 'api_key'] as Array<'oauth' | 'api_key'>);
+  const [providers, setProviders] = useState<ProviderState[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState(provider?.id || '');
+  const sessionId = useRef<string | null>(null);
+  const activeProvider = providers.find((item) => item.id === selectedId);
+  const methods = activeProvider?.authMethods || [];
+  const selectedMethod = methods.includes(authType) ? authType : methods[0];
+
+  useEffect(() => () => {
+    if (sessionId.current) void cancelNativeLogin(sessionId.current).catch(() => {});
+  }, []);
 
   useEffect(() => {
-    if (!isOpen) {
-      setLogin(null);
-      setApiKey('');
-      setPromptValue('');
-      setError('');
-      setSubmitting(false);
-      setSelectedProvider(provider || null);
-      setAuthType('oauth');
-    }
-  }, [isOpen, provider?.id]);
-
-  useEffect(() => {
-    if (!isOpen || provider) return;
+    if (!isOpen) return;
     let cancelled = false;
-    setFeaturedLoading(true);
-    void listFeaturedNativeProviders()
+    void listNativeLoginProviders()
       .then((response) => {
-        if (!cancelled) setFeatured(response.providers);
+        if (!cancelled) setProviders(response.providers);
       })
       .catch((caughtError) => {
         if (!cancelled) setError(caughtError instanceof ApiError ? caughtError.message : t('login.listFailed'));
       })
       .finally(() => {
-        if (!cancelled) setFeaturedLoading(false);
+        if (!cancelled) setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, provider?.id, t]);
+    return () => { cancelled = true; };
+  }, [isOpen, t]);
 
   useEffect(() => {
-    if (!isOpen || !login?.loginId || login.status === 'completed' || login.status === 'error') return undefined;
+    if (!isOpen || submitting || !login?.loginId || ['completed', 'error', 'cancelled'].includes(login.status)) return;
     let cancelled = false;
+    let inFlight = false;
     const timer = window.setInterval(() => {
+      if (inFlight) return;
+      inFlight = true;
       void getNativeLogin(login.loginId!)
         .then((response) => {
           if (cancelled) return;
           setLogin(response.login);
           if (response.login.status === 'completed') {
-            onSaved(response.state, t('login.loggedIn', { name: provider?.name || t('login.nativeFallback') }));
+            sessionId.current = null;
+            onSaved(response.state, t('login.loggedIn', { name: activeProvider?.name || t('login.nativeFallback') }));
             onClose();
           }
           if (response.login.status === 'error') setError(response.login.error || t('login.failed'));
         })
         .catch((caughtError) => {
           if (!cancelled) setError(caughtError instanceof ApiError ? caughtError.message : t('login.statusFailed'));
-        });
+        })
+        .finally(() => { inFlight = false; });
     }, 1000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [isOpen, login?.loginId, login?.status, provider?.name, t]);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [isOpen, submitting, login?.loginId, login?.status, activeProvider?.name, onSaved, onClose, t]);
 
   if (!isOpen) return null;
-  const activeProvider = selectedProvider || provider || null;
 
-  const startLogin = async (event?: FormEvent<HTMLFormElement>) => {
-    event?.preventDefault();
-    if (!activeProvider) {
+  const startLogin = async () => {
+    if (!activeProvider || !selectedMethod) {
       setError(t('login.needProvider'));
-      return;
-    }
-    if (authType === 'api_key' && !apiKey.trim()) {
-      setError(t('login.needApiKey'));
       return;
     }
     setSubmitting(true);
     setError('');
     try {
-      const response = await startNativeLogin({
-        providerId: activeProvider.id,
-        type: authType,
-        apiKey: authType === 'api_key' ? apiKey.trim() : undefined,
-      });
+      const response = await startNativeLogin({ providerId: activeProvider.id, type: selectedMethod });
+      sessionId.current = response.login.loginId || null;
       setLogin(response.login);
       if (response.login.status === 'completed') {
+        sessionId.current = null;
         onSaved(response.state, t('login.loggedIn', { name: activeProvider.name }));
         onClose();
       }
@@ -1048,14 +1062,11 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
 
   const submitPrompt = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!login?.loginId || !promptValue.trim()) {
-      setError(t('login.needInput'));
-      return;
-    }
+    if (!login?.loginId || !login.prompt) return;
     setSubmitting(true);
     setError('');
     try {
-      const response = await answerNativeLogin(login.loginId, promptValue.trim());
+      const response = await answerNativeLogin(login.loginId, promptValue, login.prompt.id);
       setPromptValue('');
       setLogin(response.login);
     } catch (caughtError) {
@@ -1080,56 +1091,52 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
           {!login && !provider && (
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('login.channel')}</span>
-              <select value={selectedProvider?.id || ''} onChange={(event) => { setSelectedProvider(featured.find((item) => item.id === event.target.value) || null); setAuthType('oauth'); setError(''); }} disabled={featuredLoading} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white">
-                <option value="">{featuredLoading ? t('login.reading') : t('login.pleaseSelect')}</option>
-                {featured.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.id}</option>)}
+              <select value={selectedId} onChange={(event) => { setSelectedId(event.target.value); setAuthType('oauth'); setError(''); }} disabled={loading} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white">
+                <option value="">{loading ? t('login.reading') : t('login.pleaseSelect')}</option>
+                {providers.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.id}</option>)}
               </select>
             </label>
           )}
           {!login && activeProvider && methods.length > 1 && (
             <label className="block space-y-1.5">
               <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{t('login.method')}</span>
-              <select value={authType} onChange={(event) => setAuthType(event.target.value as 'oauth' | 'api_key')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white">
-                {methods.includes('oauth') && <option value="oauth">{t('login.oauth')}</option>}
-                {methods.includes('api_key') && <option value="api_key">{t('login.apiKeyMethod')}</option>}
+              <select value={selectedMethod} onChange={(event) => setAuthType(event.target.value as 'oauth' | 'api_key')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white">
+                {methods.map((method) => <option key={method} value={method}>{activeProvider.authMethodLabels?.[method] || t(method === 'oauth' ? 'login.oauth' : 'login.apiKeyMethod')}</option>)}
               </select>
             </label>
           )}
-          {!login && authType === 'api_key' && (
-            <form onSubmit={(event) => void startLogin(event)} className="space-y-4">
-              <label className="block space-y-1.5">
-                <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">API Key</span>
-                <input value={apiKey} onChange={(event) => { setApiKey(event.target.value); setError(''); }} type="password" autoComplete="new-password" autoFocus placeholder={t('login.noEcho')} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
-              </label>
-              <button type="submit" disabled={submitting} className="flex h-9 w-full items-center justify-center rounded-md bg-surface-950 text-[13px] font-medium text-white hover:bg-surface-800 disabled:opacity-60 dark:bg-white dark:text-surface-950">
-                {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
-                {t('login.saveAuth')}
-              </button>
-            </form>
-          )}
-          {!login && authType === 'oauth' && (
-            <button type="button" onClick={() => void startLogin()} disabled={submitting} className="flex h-9 w-full items-center justify-center rounded-md bg-surface-950 text-[13px] font-medium text-white hover:bg-surface-800 disabled:opacity-60 dark:bg-white dark:text-surface-950">
-              {submitting && <Loader2 size={14} className="mr-2 animate-spin" />}
-              {t('login.openBrowser')}
+          {!login && (
+            <button type="button" onClick={() => void startLogin()} disabled={submitting || loading || !selectedMethod} className="flex h-9 w-full items-center justify-center rounded-md bg-surface-950 text-[13px] font-medium text-white hover:bg-surface-800 disabled:opacity-60 dark:bg-white dark:text-surface-950">
+              {(submitting || loading) && <Loader2 size={14} className="mr-2 animate-spin" />}
+              {t('login.start')}
             </button>
           )}
           {login?.authUrl && (
             <div className="space-y-2 rounded-md border border-surface-200 px-3 py-2 text-[12px] dark:border-surface-800">
-              <div className="text-surface-500">{t('login.opened')}</div>
-              <a href={login.authUrl} target="_blank" rel="noreferrer" className="block truncate font-mono text-primary-600 hover:underline dark:text-primary-400">{login.authUrl}</a>
+              <div className="text-surface-500">{login.instructions || t('login.opened')}</div>
+              <a href={login.authUrl} target="_blank" rel="noreferrer" className="block break-all font-mono text-primary-600 hover:underline dark:text-primary-400">{login.authUrl}</a>
             </div>
           )}
+          {login?.deviceCode && (
+            <div className="space-y-2 rounded-md border border-surface-200 px-3 py-2 text-[12px] dark:border-surface-800">
+              <div className="text-surface-500">{t('login.deviceHelp')}</div>
+              <code className="block select-all text-lg font-semibold">{login.deviceCode.userCode}</code>
+              <a href={login.deviceCode.verificationUri} target="_blank" rel="noreferrer" className="block break-all font-mono text-primary-600 hover:underline dark:text-primary-400">{login.deviceCode.verificationUri}</a>
+            </div>
+          )}
+          {login?.message && <p className="whitespace-pre-wrap text-[12px] text-surface-500">{login.message}</p>}
+          {login?.links?.map((link) => <a key={link.url} href={link.url} target="_blank" rel="noreferrer" className="block break-all text-[12px] text-primary-600 hover:underline dark:text-primary-400">{link.label || link.url}</a>)}
           {login?.status === 'need_prompt' && login.prompt && (
-            <form onSubmit={(event) => void submitPrompt(event)} className="space-y-3">
+            <form key={login.prompt.id} onSubmit={(event) => void submitPrompt(event)} className="space-y-3">
               <label className="block space-y-1.5">
                 <span className="text-[12px] font-semibold text-surface-700 dark:text-surface-300">{login.prompt.message}</span>
-                {login.prompt.options && login.prompt.options.length > 0 ? (
-                  <select value={promptValue} onChange={(event) => setPromptValue(event.target.value)} className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white">
-                    <option value="">{t('login.pleaseSelect')}</option>
-                    {login.prompt.options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                {login.prompt.type === 'select' ? (
+                  <select value={promptValue} onChange={(event) => setPromptValue(event.target.value)} required className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 text-[13px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white">
+                    <option value="" disabled>{t('login.pleaseSelect')}</option>
+                    {login.prompt.options?.map((option) => <option key={option.id} value={option.id}>{option.label}{option.description ? ` — ${option.description}` : ''}</option>)}
                   </select>
                 ) : (
-                  <input value={promptValue} onChange={(event) => setPromptValue(event.target.value)} placeholder={login.prompt.placeholder || ''} autoFocus className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
+                  <input value={promptValue} onChange={(event) => setPromptValue(event.target.value)} type={login.prompt.type === 'secret' || login.prompt.type === 'manual_code' ? 'password' : 'text'} autoComplete="off" placeholder={login.prompt.placeholder || ''} autoFocus className="w-full rounded-md border border-surface-200 bg-surface-50 px-3 py-2 font-mono text-[13px] outline-none focus:border-primary-500 dark:border-surface-700 dark:bg-surface-950 dark:text-white" />
                 )}
               </label>
               <button type="submit" disabled={submitting} className="flex h-9 w-full items-center justify-center rounded-md bg-surface-950 text-[13px] font-medium text-white hover:bg-surface-800 disabled:opacity-60 dark:bg-white dark:text-surface-950">
@@ -1138,8 +1145,9 @@ function NativeLoginModal({ provider, isOpen, onClose, onSaved }: {
               </button>
             </form>
           )}
-          {login?.status === 'pending' && <div className="flex items-center text-[12px] text-surface-500"><Loader2 size={14} className="mr-2 animate-spin" />{t('login.waiting')}</div>}
+          {(login?.status === 'pending' || login?.status === 'need_url') && <div className="flex items-center text-[12px] text-surface-500"><Loader2 size={14} className="mr-2 animate-spin" />{t('login.waiting')}</div>}
           {error && <div className="flex items-start rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"><CircleAlert size={14} className="mr-2 mt-0.5 shrink-0" />{error}</div>}
+          {login?.status === 'error' && <button type="button" onClick={() => { setLogin(null); setError(''); }} className="text-[13px] text-primary-600 hover:underline">{t('login.retry')}</button>}
         </div>
       </div>
     </div>

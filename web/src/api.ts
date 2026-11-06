@@ -69,7 +69,7 @@ export async function importPiProviders(overwrite = false, providerIds: string[]
   });
 }
 
-export async function listFeaturedNativeProviders(): Promise<{ ok: true; providers: ProviderState[] }> {
+export async function listNativeLoginProviders(): Promise<{ ok: true; providers: ProviderState[] }> {
   return request<{ ok: true; providers: ProviderState[] }>('/api/pi/native-providers');
 }
 
@@ -176,23 +176,21 @@ export async function updateCycleList(input: {
   });
 }
 
-export async function applyProfile(): Promise<{ ok: true; state: ManagerState }> {
-  return request<{ ok: true; state: ManagerState }>('/api/apply', {
-    method: 'POST',
-  });
-}
-
 export interface NativeLoginState {
   loginId?: string;
   providerId: string;
   type: 'oauth' | 'api_key';
-  status: 'pending' | 'need_url' | 'need_prompt' | 'completed' | 'error';
+  status: 'pending' | 'need_url' | 'need_prompt' | 'completed' | 'error' | 'cancelled';
   authUrl?: string;
-  prompt?: { type: string; message: string; placeholder?: string; options?: Array<{ id: string; label: string }> } | null;
+  instructions?: string;
+  message?: string;
+  links?: Array<{ url: string; label?: string }>;
+  deviceCode?: { userCode: string; verificationUri: string } | null;
+  prompt?: { id: string; type: string; message: string; placeholder?: string; options?: Array<{ id: string; label: string; description?: string }> } | null;
   error?: string;
 }
 
-export async function startNativeLogin(input: { providerId: string; type?: 'oauth' | 'api_key'; apiKey?: string }): Promise<{ ok: true; login: NativeLoginState; state: ManagerState }> {
+export async function startNativeLogin(input: { providerId: string; type?: 'oauth' | 'api_key' }): Promise<{ ok: true; login: NativeLoginState; state: ManagerState }> {
   return request<{ ok: true; login: NativeLoginState; state: ManagerState }>('/api/pi/login', {
     method: 'POST',
     body: JSON.stringify(input),
@@ -203,11 +201,15 @@ export async function getNativeLogin(loginId: string): Promise<{ ok: true; login
   return request<{ ok: true; login: NativeLoginState; state: ManagerState }>(`/api/pi/login/${encodeURIComponent(loginId)}`);
 }
 
-export async function answerNativeLogin(loginId: string, value: string): Promise<{ ok: true; login: NativeLoginState; state: ManagerState }> {
+export async function answerNativeLogin(loginId: string, value: string, promptId: string): Promise<{ ok: true; login: NativeLoginState; state: ManagerState }> {
   return request<{ ok: true; login: NativeLoginState; state: ManagerState }>(`/api/pi/login/${encodeURIComponent(loginId)}/prompt`, {
     method: 'POST',
-    body: JSON.stringify({ value }),
+    body: JSON.stringify({ value, promptId }),
   });
+}
+
+export async function cancelNativeLogin(loginId: string): Promise<void> {
+  await request(`/api/pi/login/${encodeURIComponent(loginId)}/cancel`, { method: 'POST' });
 }
 
 export async function logoutNativeProvider(providerId: string): Promise<{ ok: true; state: ManagerState }> {
@@ -225,24 +227,6 @@ export async function importLivePi(): Promise<{ ok: true; state: ManagerState }>
 
 export async function rollbackLivePi(): Promise<{ ok: true; state: ManagerState }> {
   return request<{ ok: true; state: ManagerState }>('/api/pi/live-rollback', {
-    method: 'POST',
-  });
-}
-
-export async function rollbackProfile(): Promise<{ ok: true; state: ManagerState }> {
-  return request<{ ok: true; state: ManagerState }>('/api/profile/rollback', {
-    method: 'POST',
-  });
-}
-
-export async function launchPi(): Promise<{ ok: true; state: ManagerState }> {
-  return request<{ ok: true; state: ManagerState }>('/api/pi/launch', {
-    method: 'POST',
-  });
-}
-
-export async function stopPi(): Promise<{ ok: true; state: ManagerState }> {
-  return request<{ ok: true; state: ManagerState }>('/api/pi/stop', {
     method: 'POST',
   });
 }

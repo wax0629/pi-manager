@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { writePiProfile } from "../src/profile.mjs";
+import { mergeLiveModels, mergeLiveSettings } from "../src/pi-apply.mjs";
 import { createStore } from "../src/store.mjs";
 import { seedStoreProviders } from "../src/defaults.mjs";
 import { getSupportedThinkingLevels } from "../src/thinking.mjs";
@@ -18,6 +18,41 @@ function makeFixture(t) {
     dataDir: path.join(root, "manager-data")
   };
 }
+
+test("native catalog refresh persists new models and preserves saved model controls", (t) => {
+  const fixture = makeFixture(t);
+  const store = createStore(fixture);
+  const summary = {
+    id: "openai", name: "OpenAI", piProvider: "openai",
+    models: [{ id: "gpt-6-astra", reasoning: true, contextWindow: 272000, thinkingLevelMap: { max: "max", xhigh: "xhigh" } }]
+  };
+  store.upsertNativeProvider(summary);
+  store.setActive({ providerId: summary.id, modelId: "gpt-6-astra", thinking: "max" });
+  store.updateCycleList(["openai/gpt-6-astra"]);
+  store.updateThinkingMap({ providerId: summary.id, modelId: "gpt-6-astra", thinkingLevelMap: { max: "custom-max", xhigh: "custom-high" }, source: "user", verified: true });
+  store.updateModelContextWindow({ providerId: summary.id, modelId: "gpt-6-astra", contextWindow: 500000 });
+  const active = { ...store.get().active };
+  const cycle = { ...store.get().cycle };
+  const revision = store.get().runtime.configRevision;
+  const refreshed = { ...summary, models: [...summary.models, { id: "gpt-6.1-sol", reasoning: true, contextWindow: 1050000, thinkingLevelMap: { max: "max", xhigh: "xhigh" } }] };
+  store.upsertNativeProvider(refreshed);
+  assert.equal(store.get().runtime.configRevision, revision + 1);
+  assert.deepEqual(store.get().active, active);
+  assert.deepEqual(store.get().cycle, cycle);
+  const reloaded = createStore(fixture);
+  const astra = reloaded.provider(summary.id).models.find((model) => model.id === "gpt-6-astra");
+  assert.equal(astra.contextWindow, 500000);
+  assert.equal(astra.thinkingLevelMap.max, "custom-max");
+  assert.equal(astra.thinkingMapSource, "user");
+  assert.equal(astra.thinkingMapVerified, true);
+  assert.equal(reloaded.provider(summary.id).models.some((model) => model.id === "gpt-6.1-sol"), true);
+  reloaded.setActive({ providerId: summary.id, modelId: "gpt-6.1-sol", thinking: "max" });
+  assert.equal(reloaded.get().active.modelId, "gpt-6.1-sol");
+  store.upsertNativeProvider(refreshed);
+  store.upsertNativeProvider({ ...summary, models: [] });
+  assert.equal(store.get().runtime.configRevision, revision + 1);
+  assert.equal(store.provider(summary.id).models.length, 2);
+});
 
 test("new stores start without providers, cycle entries, or an active route", (t) => {
   const fixture = makeFixture(t);
@@ -104,8 +139,8 @@ test("API and bridge credentials can be saved and cleared without leaking into s
   assert.equal(store.credential(store.provider("antigravity")), "");
   assert.equal(store.credentialConfigured(store.provider("antigravity")), false);
 
-  assert.throws(() => store.setCredential("openai-codex", "should-fail"), /原生订阅/);
-  assert.throws(() => store.deleteCredential("openai-codex"), /原生订阅/);
+  assert.throws(() => store.setCredential("openai", "should-fail"), /原生订阅/);
+  assert.throws(() => store.deleteCredential("openai"), /原生订阅/);
   assert.throws(() => store.setCredential("qiniu", "   "), /凭据不能为空/);
 });
 
@@ -162,8 +197,8 @@ test("custom provider catalogs can add and remove models without dropping the de
     () => store.removeProviderModel({ providerId: "demo-relay", modelId: "keep-model" }),
     /不能删除当前默认模型/
   );
-  assert.throws(() => store.addProviderModel({ providerId: "openai-codex", model: { id: "nope" } }), /只有 OpenAI 兼容 API 渠道可以增删模型/);
-  assert.throws(() => store.removeProviderModel({ providerId: "openai-codex", modelId: "gpt-5.6-luna" }), /只有 OpenAI 兼容 API 渠道可以增删模型/);
+  assert.throws(() => store.addProviderModel({ providerId: "openai", model: { id: "nope" } }), /只有 OpenAI 兼容 API 渠道可以增删模型/);
+  assert.throws(() => store.removeProviderModel({ providerId: "openai", modelId: "gpt-5.6-luna" }), /只有 OpenAI 兼容 API 渠道可以增删模型/);
 });
 
 test("custom provider validation rejects unsupported URLs and empty model lists", (t) => {
@@ -266,7 +301,7 @@ test("custom provider edits reject native channels, duplicate ids and emptying t
     models: ["other-model"]
   });
 
-  assert.throws(() => store.updateProvider("openai-codex", { name: "Nope" }), /只有 OpenAI 兼容 API 渠道可以编辑/);
+  assert.throws(() => store.updateProvider("openai", { name: "Nope" }), /只有 OpenAI 兼容 API 渠道可以编辑/);
   store.updateProvider("qiniu", { name: "七牛云改名" });
   assert.equal(store.provider("qiniu").name, "七牛云改名");
   assert.throws(
@@ -285,87 +320,6 @@ test("custom provider edits reject native channels, duplicate ids and emptying t
     () => store.updateProvider("demo-relay", { models: [] }),
     /至少填写一个模型 ID/
   );
-});
-
-test("profile generation writes ready providers into models.json and keeps the launcher isolated", (t) => {
-  const fixture = makeFixture(t);
-  const store = createStore(fixture);
-  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
-  store.setCredential("qiniu", "qiniu-secret-value");
-  store.addProvider({
-    id: "demo-relay",
-    name: "Demo Relay",
-    baseUrl: "https://relay.example.test/v1",
-    models: [{
-      id: "demo-model",
-      name: "Demo Model",
-      reasoning: true,
-      thinkingLevels: ["off", "low", "medium", "high"],
-      input: ["text"],
-      contextWindow: 128000,
-      maxTokens: 32000
-    }],
-    apiKey: "test-secret-value"
-  });
-  store.setActive({ providerId: "demo-relay", modelId: "demo-model", thinking: "high" });
-  store.updateCycleList(["demo-relay/demo-model", "qiniu/gpt-5.6-luna"]);
-
-  const profile = writePiProfile({
-    dataDir: fixture.dataDir,
-    state: store.get(),
-    piExecutable: "/usr/bin/pi",
-    credentials: {
-      qiniu: "qiniu-secret-value",
-      "demo-relay": "test-secret-value"
-    }
-  });
-  const settings = JSON.parse(fs.readFileSync(profile.settingsPath, "utf8"));
-  const models = JSON.parse(fs.readFileSync(profile.modelsPath, "utf8"));
-  const launcher = fs.readFileSync(profile.launcherPath, "utf8");
-
-  assert.equal(profile.mode, "models-json");
-  assert.equal(profile.extensionPath, "");
-  assert.equal(path.dirname(profile.settingsPath), profile.runtimeDir);
-  assert.equal(fs.existsSync(path.join(profile.runtimeDir, ".pi", "settings.json")), false);
-  assert.equal(settings.defaultProvider, "demo-relay");
-  assert.equal(settings.defaultModel, "demo-model");
-  assert.deepEqual(settings.enabledModels, [
-    "demo-relay/demo-model",
-    "qiniu/gpt-5.6-luna"
-  ]);
-  assert.equal(models.providers["demo-relay"].baseUrl, "https://relay.example.test/v1");
-  assert.equal(models.providers["demo-relay"].apiKey, "$PI_MANAGER_DEMO_RELAY_API_KEY");
-  assert.equal(models.providers["qiniu"].baseUrl, "https://llmapi.qiniu.io/v1");
-  assert.equal(models.providers["qiniu"].apiKey, "$PI_MANAGER_QINIU_API_KEY");
-  assert.equal(models.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].thinkingLevelMap.max, "max");
-  assert.equal(launcher.includes(`export PI_CODING_AGENT_DIR='${profile.runtimeDir}'`), true);
-  assert.equal(launcher.includes(`export PI_CODING_AGENT_SESSION_DIR='${path.join(profile.runtimeDir, "sessions")}'`), true);
-  assert.equal(launcher.includes(`export PI_MANAGER_DEMO_RELAY_API_KEY='test-secret-value'`), true);
-  assert.equal(launcher.includes(`export PI_MANAGER_QINIU_API_KEY='qiniu-secret-value'`), true);
-  assert.equal(launcher.includes("PI_MANAGER_GATEWAY_KEY"), false);
-  assert.equal(launcher.includes("'--provider' 'demo-relay'"), true);
-  assert.equal(launcher.includes("'demo-model'"), true);
-});
-
-test("profile migration removes only known legacy Manager files", (t) => {
-  const fixture = makeFixture(t);
-  const legacyDir = path.join(fixture.dataDir, "profiles", "active", ".pi");
-  const legacyExtensionsDir = path.join(legacyDir, "extensions");
-  const sessionsDir = path.join(legacyDir, "sessions");
-  fs.mkdirSync(legacyExtensionsDir, { recursive: true });
-  fs.mkdirSync(sessionsDir, { recursive: true });
-  fs.writeFileSync(path.join(legacyDir, "settings.json"), "{}\n");
-  fs.writeFileSync(path.join(legacyDir, "models.json"), "{}\n");
-  fs.writeFileSync(path.join(legacyExtensionsDir, "pi-manager-provider.ts"), "old\n");
-  fs.writeFileSync(path.join(sessionsDir, "keep.jsonl"), "session\n");
-
-  const store = createStore(fixture);
-  seedStoreProviders(store, { projectRoot: fixture.projectRoot });
-  const profile = writePiProfile({ dataDir: fixture.dataDir, state: store.get(), piExecutable: "/usr/bin/pi" });
-
-  assert.equal(fs.existsSync(path.join(profile.runtimeDir, "settings.json")), true);
-  assert.equal(fs.existsSync(path.join(profile.runtimeDir, ".pi", "settings.json")), false);
-  assert.equal(fs.existsSync(path.join(sessionsDir, "keep.jsonl")), true);
 });
 
 test("candidate route rejects unsupported thinking levels", (t) => {
@@ -451,7 +405,7 @@ test("context window updates persist and reject invalid values", (t) => {
   }
 });
 
-test("candidate route changes remain unapplied until profile application", (t) => {
+test("candidate route changes do not write live Pi configuration", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
   seedStoreProviders(store, { projectRoot: fixture.projectRoot });
@@ -493,27 +447,26 @@ test("cycle list updates persist and write enabledModels in order", (t) => {
 
   store.updateCycleList([
     "qiniu/grok-4.6",
-    "openai-codex/gpt-5.6-luna",
+    "openai/gpt-5.6-luna",
     "qiniu/gpt-5.6-luna"
   ]);
 
   const reloaded = createStore(fixture);
   assert.deepEqual(reloaded.get().cycle.modelRefs, [
     "qiniu/grok-4.6",
-    "openai-codex/gpt-5.6-luna",
+    "openai/gpt-5.6-luna",
     "qiniu/gpt-5.6-luna"
   ]);
 
-  const profile = writePiProfile({ dataDir: fixture.dataDir, state: reloaded.get(), piExecutable: "/usr/bin/pi" });
-  const settings = JSON.parse(fs.readFileSync(profile.settingsPath, "utf8"));
+  const settings = mergeLiveSettings({}, reloaded.get());
   assert.deepEqual(settings.enabledModels, [
     "qiniu/grok-4.6",
-    "openai-codex/gpt-5.6-luna",
+    "openai/gpt-5.6-luna",
     "qiniu/gpt-5.6-luna"
   ]);
 });
 
-test("profile generation rejects missing cycle references", (t) => {
+test("live settings reject missing cycle references", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
   seedStoreProviders(store, { projectRoot: fixture.projectRoot });
@@ -521,12 +474,12 @@ test("profile generation rejects missing cycle references", (t) => {
   store.updateCycleList(["missing-provider/missing-model"]);
 
   assert.throws(
-    () => writePiProfile({ dataDir: fixture.dataDir, state: store.get(), piExecutable: "/usr/bin/pi" }),
+    () => mergeLiveSettings({}, store.get()),
     /不存在的模型/
   );
 });
 
-test("profile writes the saved thinking map without silently downgrading levels", (t) => {
+test("live models preserve the saved thinking map without silently downgrading levels", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
   store.addProvider({
@@ -543,56 +496,26 @@ test("profile writes the saved thinking map without silently downgrading levels"
   });
   store.setActive({ providerId: "demo-relay", modelId: "demo-model", thinking: "high" });
 
-  const profile = writePiProfile({
-    dataDir: fixture.dataDir,
-    state: store.get(),
-    piExecutable: "/usr/bin/pi",
-    credentials: { "demo-relay": "test-secret-value" }
-  });
-  const models = JSON.parse(fs.readFileSync(profile.modelsPath, "utf8"));
+  const models = mergeLiveModels({}, store.get());
 
-  assert.equal(profile.extensionPath, "");
   assert.match(JSON.stringify(models.providers["demo-relay"]), /"medium":"balanced"/);
   assert.match(JSON.stringify(models.providers["demo-relay"]), /"high":"deep"/);
   assert.match(JSON.stringify(models.providers["demo-relay"]), /"xhigh":null/);
   assert.doesNotMatch(JSON.stringify(models.providers["demo-relay"]), /"max":"high"/);
 });
 
-test("native profiles write model thinking overrides to models.json", (t) => {
+test("live native models retain thinking and context overrides", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
   seedStoreProviders(store, { projectRoot: fixture.projectRoot });
-  store.setActive({ providerId: "qiniu", modelId: "gpt-5.6-luna", thinking: "medium" });
-  const profile = writePiProfile({
-    dataDir: fixture.dataDir,
-    state: store.get(),
-    piExecutable: "/usr/bin/pi"
-  });
-  const models = JSON.parse(fs.readFileSync(profile.modelsPath, "utf8"));
-  const launcher = fs.readFileSync(profile.launcherPath, "utf8");
-
-  store.setActive({ providerId: "openai-codex", modelId: "gpt-5.6-luna", thinking: "high" });
-  const republished = writePiProfile({ dataDir: fixture.dataDir, state: store.get(), piExecutable: "/usr/bin/pi" });
-  const republishedModels = JSON.parse(fs.readFileSync(republished.modelsPath, "utf8"));
-  const republishedLauncher = fs.readFileSync(republished.launcherPath, "utf8");
-
-  assert.equal(profile.extensionPath, "");
-  assert.equal(launcher.includes(`export PI_CODING_AGENT_DIR='${profile.runtimeDir}'`), true);
-  assert.equal(launcher.includes(`export PI_CODING_AGENT_SESSION_DIR='${path.join(profile.runtimeDir, "sessions")}'`), true);
-  assert.equal(launcher.includes("'--provider' 'qiniu'"), true);
-  assert.equal(republished.extensionPath, "");
-  assert.equal(republishedLauncher.includes(`export PI_CODING_AGENT_DIR='${republished.runtimeDir}'`), true);
-  assert.equal(republishedLauncher.includes("'--provider' 'openai-codex'"), true);
-  assert.equal(republishedLauncher.includes("PI_MANAGER_GATEWAY_KEY"), false);
-  assert.equal(models.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].thinkingLevelMap.max, "max");
-  assert.equal(models.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].thinkingLevelMap.xhigh, "xhigh");
-  assert.equal(models.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].contextWindow, 1050000);
-  assert.equal(republishedModels.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].thinkingLevelMap.max, "max");
-  assert.equal(republishedModels.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].thinkingLevelMap.xhigh, "xhigh");
-  assert.equal(republishedModels.providers["openai-codex"].modelOverrides["gpt-5.6-luna"].contextWindow, 1050000);
+  const models = mergeLiveModels({}, store.get());
+  const overrides = models.providers.openai.modelOverrides["gpt-5.6-luna"];
+  assert.equal(overrides.thinkingLevelMap.max, "max");
+  assert.equal(overrides.thinkingLevelMap.xhigh, "xhigh");
+  assert.equal(overrides.contextWindow, 1050000);
 });
 
-test("profile injects an edited context window for custom providers", (t) => {
+test("live models include an edited context window for custom providers", (t) => {
   const fixture = makeFixture(t);
   const store = createStore(fixture);
   const provider = store.addProvider({
@@ -605,13 +528,6 @@ test("profile injects an edited context window for custom providers", (t) => {
   store.setActive({ providerId: provider.id, modelId: "demo-model", thinking: "off" });
   store.updateModelContextWindow({ providerId: provider.id, modelId: "demo-model", contextWindow: 256000 });
 
-  const profile = writePiProfile({
-    dataDir: fixture.dataDir,
-    state: store.get(),
-    piExecutable: "/usr/bin/pi",
-    credentials: { "demo-relay": "test-secret-value" }
-  });
-  const models = JSON.parse(fs.readFileSync(profile.modelsPath, "utf8"));
-  assert.equal(profile.extensionPath, "");
+  const models = mergeLiveModels({}, store.get());
   assert.match(JSON.stringify(models.providers["demo-relay"]), /"contextWindow":256000/);
 });
