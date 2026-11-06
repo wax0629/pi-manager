@@ -69,8 +69,21 @@ export function mergeLiveModels(existing, state) {
     if (provider.kind === "native-subscription") {
       const modelOverrides = buildModelOverrides(provider);
       const key = provider.piProvider || provider.id;
-      if (modelOverrides) {
-        providers[key] = { ...(providers[key] || {}), modelOverrides };
+      const legacy = providers["openai-codex"];
+      const migrateLegacy = key === "openai" && legacy
+        && !(state.providers || []).some((item) => item.nativeRegistryId === "openai-codex")
+        && Object.keys(legacy).every((field) => field === "modelOverrides");
+      if (migrateLegacy) {
+        providers[key] = {
+          ...(providers[key] || {}),
+          modelOverrides: { ...legacy.modelOverrides, ...providers[key]?.modelOverrides, ...modelOverrides }
+        };
+        delete providers["openai-codex"];
+      } else if (modelOverrides) {
+        providers[key] = {
+          ...(providers[key] || {}),
+          modelOverrides: { ...providers[key]?.modelOverrides, ...modelOverrides }
+        };
       }
       continue;
     }

@@ -11,7 +11,6 @@ import { applyLivePiConfig, inspectLivePiSync, restoreLivePiBackup } from "./pi-
 import { readPiModelsConfig, resolvePiAgentDir } from "./pi-import.mjs";
 import { createNativeAuth } from "./pi-native.mjs";
 import { sanitizeConnectionTestUrl, testProviderConnection } from "./provider-test.mjs";
-import { writePiProfile } from "./profile.mjs";
 import { createStore } from "./store.mjs";
 
 const managerRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -173,8 +172,8 @@ async function bridgeStatus(provider) {
   return result;
 }
 
-function detectPi(providerId = "openai-codex", { force = false } = {}) {
-  if (!piInfo) {
+function detectPi(providerId = "openai", { force = false } = {}) {
+  if (!piInfo || force) {
     const detected = { installed: false, path: piExecutable, version: "" };
     try {
       detected.version = execFileSync(piExecutable, ["--version"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -244,31 +243,30 @@ async function providerPublicState(provider, { forceAuth = false, nativeSummary 
   };
 }
 
-async function mergeNativeProviders(providers) {
+async function syncNativeProviders({ refreshModels = false, auth = nativeAuth } = {}) {
+  if (!store.get().providers.some((provider) => provider.kind === "native-subscription")) return [];
   let nativeSummaries = [];
   try {
-    nativeSummaries = await nativeAuth.listNativeProviders();
-  } catch {
-    return providers;
+    nativeSummaries = await auth.listNativeProviders({ refresh: refreshModels });
+  } catch (error) {
+    if (refreshModels) throw error;
+    return [];
   }
-  return providers.map((provider) => {
-    const summary = nativeSummaries.find((item) => item.id === provider.id);
-    if (!summary || provider.kind !== "native-subscription") return provider;
-    return {
-      ...provider,
-      credentialConfigured: summary.credentialConfigured,
-      status: summary.credentialConfigured ? "ready" : provider.status,
-      detail: summary.authLabel || provider.detail,
-      authMethods: summary.authMethods
-    };
-  });
+  for (const summary of nativeSummaries) {
+    if (store.provider(summary.id)?.kind === "native-subscription") store.upsertNativeProvider(summary);
+  }
+  return nativeSummaries;
 }
 
-async function publicState({ forceAuth = false } = {}) {
+async function publicState({ forceAuth = false, refreshModels = false, auth = nativeAuth } = {}) {
+  const nativeSummaries = await syncNativeProviders({ refreshModels, auth });
   const current = store.get();
-  const providers = await mergeNativeProviders(
-    await Promise.all(current.providers.map((provider) => providerPublicState(provider, { forceAuth })))
-  );
+  const providers = await Promise.all(current.providers.map((provider) => {
+    const nativeSummary = provider.kind === "native-subscription"
+      ? nativeSummaries.find((summary) => summary.id === provider.id)
+      : null;
+    return providerPublicState({ ...provider, ...(nativeSummary ? { authMethods: nativeSummary.authMethods, authMethodLabels: nativeSummary.authMethodLabels } : {}) }, { forceAuth, nativeSummary });
+  }));
   const activeProvider = providers.find((provider) => provider.id === current.active.providerId);
   const activeModel = activeProvider?.models.find((model) => model.id === current.active.modelId);
   const gatewayStats = gateway.getStats();
@@ -349,26 +347,6 @@ function rollbackLivePi() {
   return result;
 }
 
-function applyProfile() {
-  const appliedSnapshot = store.snapshotConfiguration();
-  const profile = writePiProfile({
-    dataDir: store.dataDir,
-    state: store.get(),
-    piExecutable,
-    credentials: collectProviderCredentials()
-  });
-  store.update((state) => {
-    state.runtime.profilePath = profile.runtimeDir;
-    state.runtime.extensionPath = profile.extensionPath;
-    state.runtime.appliedRevision = state.runtime.configRevision;
-    state.runtime.appliedSnapshot = appliedSnapshot;
-    state.runtime.lastAppliedAt = new Date().toISOString();
-    state.runtime.lastError = null;
-  });
-  store.recordEvent("profile", "已生成 Pi 受控 profile", profile.runtimeDir);
-  return profile;
-}
-
 function validateTargetProject(targetProject) {
   if (!targetProject || typeof targetProject !== "string") throw new Error("项目目录不能为空");
   const resolved = path.resolve(targetProject);
@@ -393,49 +371,6 @@ async function stopGateway() {
   store.recordEvent("gateway", "本地网关已停止", "");
 }
 
-async function launchPi() {
-  await ensureCycleListReady();
-  const profile = applyProfile();
-  const child = await import("node:child_process").then(({ spawn }) => spawn(profile.launcherPath, [], {
-    cwd: store.get().targetProject,
-    detached: true,
-    stdio: "ignore"
-  }));
-  child.unref();
-  store.update((state) => {
-    state.runtime.lastLaunchAt = new Date().toISOString();
-    state.runtime.lastLaunchPid = child.pid || null;
-    state.runtime.lastStopAt = null;
-  });
-  store.recordEvent("pi", "已启动 Pi", profile.launcherPath);
-  return profile;
-}
-
-async function stopPi() {
-  const pid = store.get().runtime.lastLaunchPid;
-  if (!pid) throw new Error("没有可停止的 Pi 进程");
-  try {
-    process.kill(process.platform === "win32" ? pid : -pid, "SIGTERM");
-  } catch (error) {
-    if (!(error instanceof Error) || error.code !== "ESRCH") {
-      throw error;
-    }
-  }
-  store.update((state) => {
-    state.runtime.lastLaunchPid = null;
-    state.runtime.lastStopAt = new Date().toISOString();
-    state.runtime.lastError = null;
-  });
-  store.recordEvent("pi", "已停止 Pi", String(pid));
-}
-
-function rollbackProfile() {
-  store.restoreAppliedConfiguration();
-  const profile = applyProfile();
-  store.recordEvent("profile", "已回滚到上次成功应用的配置", profile.runtimeDir);
-  return profile;
-}
-
 async function openBridge() {
   const provider = store.provider("antigravity");
   const url = provider?.baseUrl ? new URL(provider.baseUrl).origin : "http://127.0.0.1:8045";
@@ -456,7 +391,7 @@ const gateway = createGateway({
 
 async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
   if (req.method === "GET" && pathname === "/api/state") {
-    sendJson(res, 200, await publicState({ forceAuth }));
+    sendJson(res, 200, await publicState({ forceAuth, refreshModels: forceAuth }));
     return;
   }
   if (req.method === "GET" && pathname === "/api/events") {
@@ -494,18 +429,12 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
     sendJson(res, 200, { ok: true, state: await publicState() });
     return;
   }
-  if (req.method === "POST" && pathname === "/api/apply") {
-    await ensureCycleListReady();
-    const profile = applyProfile();
-    sendJson(res, 200, { ok: true, profile, state: await publicState() });
-    return;
-  }
+
   if (req.method === "POST" && pathname === "/api/pi/login") {
     const body = await parseBody(req);
     const result = await nativeAuth.login({
       providerId: body.providerId,
-      type: body.type,
-      apiKey: body.apiKey
+      type: body.type
     });
     if (result.status === "completed") {
       const summaries = await nativeAuth.listNativeProviders();
@@ -531,8 +460,13 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
   if (req.method === "POST" && pathname.startsWith("/api/pi/login/") && pathname.endsWith("/prompt")) {
     const loginId = pathname.split("/")[4];
     const body = await parseBody(req);
-    const result = nativeAuth.answerPrompt(loginId, body.value);
+    const result = nativeAuth.answerPrompt(loginId, body.value, body.promptId);
     sendJson(res, 200, { ok: true, login: result, state: await publicState() });
+    return;
+  }
+  if (req.method === "POST" && pathname.startsWith("/api/pi/login/") && pathname.endsWith("/cancel")) {
+    const loginId = pathname.split("/")[4];
+    sendJson(res, 200, { ok: true, login: nativeAuth.cancelLogin(loginId) });
     return;
   }
   if (req.method === "POST" && pathname === "/api/pi/logout") {
@@ -553,27 +487,14 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
     sendJson(res, 200, { ok: true, result, state: await publicState() });
     return;
   }
-  if (req.method === "POST" && pathname === "/api/profile/rollback") {
-    const profile = rollbackProfile();
-    sendJson(res, 200, { ok: true, profile, state: await publicState() });
-    return;
-  }
+
   if (req.method === "PATCH" && pathname === "/api/models/cycle") {
     const body = await parseBody(req);
     store.updateCycleList(body.modelRefs);
     sendJson(res, 200, { ok: true, state: await publicState() });
     return;
   }
-  if (req.method === "POST" && pathname === "/api/pi/launch") {
-    const profile = await launchPi();
-    sendJson(res, 200, { ok: true, profile, state: await publicState() });
-    return;
-  }
-  if (req.method === "POST" && pathname === "/api/pi/stop") {
-    const profile = await stopPi();
-    sendJson(res, 200, { ok: true, profile, state: await publicState() });
-    return;
-  }
+
   if (req.method === "POST" && pathname === "/api/gateway/start") {
     const body = await parseBody(req);
     if (body.port !== undefined) {
@@ -622,8 +543,7 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
     });
     store.touchConfiguration();
     store.recordEvent("project", "已更新 Pi 目标项目", targetProject);
-    const profile = applyProfile();
-    sendJson(res, 200, { ok: true, profile, state: await publicState() });
+    sendJson(res, 200, { ok: true, state: await publicState() });
     return;
   }
   if (req.method === "POST" && pathname.startsWith("/api/providers/") && pathname.endsWith("/credential")) {
@@ -640,7 +560,7 @@ async function handleApi(req, res, pathname, { forceAuth = false } = {}) {
     return;
   }
   if (req.method === "GET" && pathname === "/api/pi/native-providers") {
-    sendJson(res, 200, { ok: true, providers: await nativeAuth.listFeaturedNativeProviders() });
+    sendJson(res, 200, { ok: true, providers: await nativeAuth.listLoginProviders() });
     return;
   }
   if (req.method === "GET" && pathname === "/api/pi/import") {
@@ -770,4 +690,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   });
 }
 
-export { managerRoot, projectRoot, publicDir, store, gateway, publicState, applyProfile, detectPi };
+export { managerRoot, projectRoot, publicDir, store, gateway, publicState, detectPi };

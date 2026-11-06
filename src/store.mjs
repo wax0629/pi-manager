@@ -25,7 +25,7 @@ function safeId(value) {
 }
 
 const customProviderKinds = new Set(["openai-api"]);
-const BUILTIN_PROVIDER_IDS = new Set(["qiniu", "antigravity", "openai-codex"]);
+const BUILTIN_PROVIDER_IDS = new Set(["qiniu", "antigravity", "openai", "openai-codex"]);
 const DEFAULT_CONTEXT_WINDOW = 128000;
 const MAX_CONTEXT_WINDOW = 100000000;
 
@@ -168,8 +168,47 @@ function mergeProvider(defaultProvider, savedProvider) {
   };
 }
 
+function migrateLegacyNativeProvider(savedState) {
+  const legacy = savedState.providers?.find((provider) => provider.id === "openai-codex" && provider.kind === "native-subscription");
+  const current = savedState.providers?.find((provider) => provider.id === "openai");
+  // Never replace a user-defined relay using the same ID.
+  if (!legacy || legacy.nativeRegistryId === legacy.id || (current && current.kind !== "native-subscription")) return savedState;
+  const models = new Map((legacy.models || []).map((model) => [model.id, model]));
+  for (const model of current?.models || []) models.set(model.id, model);
+  const migrated = {
+    ...legacy,
+    ...current,
+    id: "openai",
+    name: "OpenAI",
+    piProvider: "openai",
+    description: "Pi 原生官方渠道（OAuth / API Key）",
+    models: [...models.values()]
+  };
+  return {
+    ...savedState,
+    providers: savedState.providers
+      .filter((provider) => !current || provider !== legacy)
+      .map((provider) => provider === (current || legacy) ? migrated : provider),
+    active: savedState.active?.providerId === legacy.id
+      ? { ...savedState.active, providerId: migrated.id }
+      : savedState.active,
+    cycle: {
+      ...savedState.cycle,
+      modelRefs: normalizeCycleModelRefs(savedState.cycle?.modelRefs).map((ref) =>
+        ref.startsWith(`${legacy.id}/`) ? `${migrated.id}/${ref.slice(legacy.id.length + 1)}` : ref
+      ).filter((ref, index, refs) => refs.indexOf(ref) === index)
+    },
+    runtime: {
+      ...savedState.runtime,
+      configRevision: (Number.isInteger(savedState.runtime?.configRevision) && savedState.runtime.configRevision > 0
+        ? savedState.runtime.configRevision : 1) + 1
+    }
+  };
+}
+
 function normalizeState(defaultState, savedState) {
   if (!savedState || typeof savedState !== "object") return defaultState;
+  savedState = migrateLegacyNativeProvider(savedState);
   const providersById = new Map((savedState.providers || []).map((provider) => [provider.id, provider]));
   const providers = defaultState.providers.map((provider) => mergeProvider(provider, providersById.get(provider.id)));
   for (const provider of savedState.providers || []) {
@@ -524,12 +563,35 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
     },
     upsertNativeProvider(summary) {
       const existing = store.provider(summary.id);
-      const models = mergeProviderModels(summary.models || [], existing?.models || []);
+      const existingModels = new Map((existing?.models || []).map((model) => [model.id, model]));
+      const incomingModels = (summary.models || []).map((model) => {
+        const previous = existingModels.get(model.id);
+        if (!previous) return model;
+        return {
+          ...model,
+          // Context has no source marker; keep the saved per-model setting.
+          contextWindow: previous.contextWindow,
+          ...(previous.thinkingMapSource !== "provider-default" ? {
+            thinkingLevelMap: previous.thinkingLevelMap,
+            thinkingMapSource: previous.thinkingMapSource,
+            thinkingMapVerified: previous.thinkingMapVerified
+          } : {})
+        };
+      });
+      const models = mergeProviderModels(incomingModels, existing?.models || []);
       if (existing) {
         if (existing.kind === "native-subscription") {
-          existing.name = summary.name || existing.name;
-          existing.piProvider = summary.piProvider || existing.piProvider || existing.id;
-          if (models.length) existing.models = models;
+          const next = {
+            ...existing,
+            name: summary.name || existing.name,
+            piProvider: summary.piProvider || existing.piProvider || existing.id,
+            ...(summary.nativeRegistryId ? { nativeRegistryId: summary.nativeRegistryId } : {}),
+            models: models.length ? models : existing.models
+          };
+          if (JSON.stringify(next) !== JSON.stringify(existing)) {
+            Object.assign(existing, next);
+            store.touchConfiguration();
+          }
         }
         return existing;
       }
@@ -538,6 +600,7 @@ export function createStore({ projectRoot, dataDir = defaultDataDir() }) {
         name: summary.name || summary.id,
         kind: "native-subscription",
         piProvider: summary.piProvider || summary.id,
+        ...(summary.nativeRegistryId ? { nativeRegistryId: summary.nativeRegistryId } : {}),
         description: "Pi 原生渠道",
         models
       };

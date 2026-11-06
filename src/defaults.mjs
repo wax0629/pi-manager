@@ -83,7 +83,7 @@ const antigravityModels = [
   }
 ].map(catalogModel);
 
-const codexModels = [
+const openaiModels = [
   {
     id: "gpt-5.6-luna",
     name: "GPT-5.6 Luna",
@@ -142,12 +142,12 @@ export function createSeedProviders({ projectRoot }) {
       models: antigravityModels
     },
     {
-      id: "openai-codex",
-      name: "OpenAI Codex",
+      id: "openai",
+      name: "OpenAI",
       kind: "native-subscription",
-      piProvider: "openai-codex",
-      description: "Pi 原生官方订阅",
-      models: codexModels
+      piProvider: "openai",
+      description: "Pi 原生官方渠道（OAuth / API Key）",
+      models: openaiModels
     }
   ];
 }
@@ -164,7 +164,7 @@ export function seedStoreProviders(store, { projectRoot } = {}) {
     state.cycle = {
       modelRefs: [
         "qiniu/gpt-5.6-luna",
-        "openai-codex/gpt-5.6-luna",
+        "openai/gpt-5.6-luna",
         "qiniu/gpt-5.6-sol"
       ]
     };

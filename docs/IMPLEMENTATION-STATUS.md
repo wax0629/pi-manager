@@ -1,6 +1,6 @@
 # Implementation Status
 
-Current product path (2026-09-10):
+Current product path (2026-11-06):
 
 ```text
 供应商与账号
@@ -21,6 +21,17 @@ Does not fork Pi. Does not modify a user's project `.pi`.
 ## Included
 
 - Read provider, model, route, Pi and gateway status from `GET /api/state`.
+- Restore native catalogs/auth from Pi's local cache on normal reads. Explicit
+  `GET /api/state?refresh=1` refreshes the installed SDK catalog and Pi version,
+  persists new native models, and preserves saved Thinking/Context, route and cycle.
+  Concurrent refreshes share a request; failures/timeouts return an error.
+- Discover login channels and auth methods from the installed Pi SDK registry,
+  including new native providers after a Pi upgrade. Custom `models.json`
+  providers stay on the separate import path.
+- Follow both OAuth and API key SDK login interactions: text/secret prompts,
+  explicit selections, browser/device authorization, information and progress.
+  Closing the dialog cancels login; callback cancellation clears stale prompts.
+  Credentials remain in Pi auth storage and are never included in Manager state.
 - Empty start: no seed providers, cycle, or active route.
 - Add / edit / delete custom OpenAI-compatible providers.
 - Fetch an upstream OpenAI `/models` catalog during setup; search, edit,
@@ -38,14 +49,16 @@ Does not fork Pi. Does not modify a user's project `.pi`.
 - CLI entry `pi-manager` / `npx @wax0629/pi-manager` starts the API, serves
   `web/dist`, and opens the browser. Occupied ports reopen the existing instance.
 
-## Removed from the UI
+## Removed
 
-Isolated profile apply / launch / stop / rollback. Daily path is live import.
-Backend endpoints still exist and are leftover cleanup.
+Isolated profile apply / launch / stop / rollback, including backend APIs,
+client helpers and launcher/profile generation. Changing the target project
+only updates Manager state; it does not write `profiles/active`. Existing
+isolated files are left untouched. Shared model/settings builders remain for
+live import, which is the supported configuration path.
 
 ## Deferred
 
-- strip isolated profile backend (`/api/apply`, launch, stop);
 - listing on pi.dev/packages (that gallery is extensions/skills/themes only);
 - automatic background catalog refresh;
 - Antigravity adapter.
