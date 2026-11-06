@@ -180,12 +180,13 @@ export interface NativeLoginState {
   loginId?: string;
   providerId: string;
   type: 'oauth' | 'api_key';
-  status: 'pending' | 'need_url' | 'need_prompt' | 'completed' | 'error' | 'cancelled';
+  status: 'pending' | 'need_url' | 'need_device_code' | 'need_prompt' | 'completed' | 'error' | 'cancelled';
   authUrl?: string;
   instructions?: string;
   message?: string;
   links?: Array<{ url: string; label?: string }>;
-  deviceCode?: { userCode: string; verificationUri: string } | null;
+  userCode?: string;
+  expiresInSeconds?: number;
   prompt?: { id: string; type: string; message: string; placeholder?: string; options?: Array<{ id: string; label: string; description?: string }> } | null;
   error?: string;
 }

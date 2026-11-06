@@ -290,7 +290,8 @@ test("device authorization and SDK information remain visible while waiting", as
   }) });
   const started = await auth.login({ providerId: "openai" });
   const session = await waitForStatus(auth, started.loginId, "need_prompt");
-  assert.deepEqual(session.deviceCode, { userCode: "ABCD-EFGH", verificationUri: "https://auth.example.test/device" });
+  assert.equal(session.userCode, "ABCD-EFGH");
+  assert.equal(session.authUrl, "https://auth.example.test/device");
   assert.equal(session.message, "Use your work account");
   assert.equal(session.links[0].label, "Help");
   auth.cancelLogin(started.loginId);
@@ -345,4 +346,105 @@ test("explicit refresh times out even if an SDK call does not settle on abort", 
   }) });
   await assert.rejects(() => auth.listNativeProviders({ refresh: true }), /刷新超时/);
   assert.equal(signal.aborted, true);
+});
+
+const xai = {
+  id: "xai",
+  name: "xAI",
+  configured: false,
+  auth: {
+    oauth: { login: async () => ({ type: "oauth" }) },
+    apiKey: { login: async () => ({ type: "api_key" }) }
+  },
+  models: [{ id: "grok-4", name: "Grok 4", reasoning: true }]
+};
+
+test("xAI subscription login surfaces the device code and opens only an https verification URL", async () => {
+  const opened = [];
+  let finishLogin;
+  const nativeAuth = createNativeAuth({
+    openUrl: async (url) => { opened.push(url); },
+    loadSdk: async () => fakeSdk({
+      providers: [xai],
+      loginImpl: async (_providerId, type, interaction) => {
+        assert.equal(type, "oauth");
+        interaction.notify({
+          type: "device_code",
+          userCode: "ABCD-1234",
+          verificationUri: "https://accounts.x.ai/oauth2/device?user_code=ABCD-1234",
+          intervalSeconds: 5,
+          expiresInSeconds: 900,
+          deviceCode: "secret-device-code"
+        });
+        await new Promise((resolve) => { finishLogin = resolve; });
+        return { type: "oauth" };
+      }
+    })
+  });
+
+  const started = await nativeAuth.login({ providerId: "xai", type: "oauth" });
+  let waiting = started;
+  for (let index = 0; index < 20 && waiting.status !== "need_device_code"; index += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    waiting = await nativeAuth.loginStatus(started.loginId);
+  }
+
+  assert.equal(waiting.status, "need_device_code");
+  assert.equal(waiting.userCode, "ABCD-1234");
+  assert.equal(waiting.authUrl, "https://accounts.x.ai/oauth2/device?user_code=ABCD-1234");
+  assert.equal(waiting.expiresInSeconds, 900);
+  assert.equal(waiting.prompt, null);
+  assert.equal("deviceCode" in waiting, false);
+  assert.equal(JSON.stringify(waiting).includes("secret-device-code"), false);
+  assert.deepEqual(opened, ["https://accounts.x.ai/oauth2/device?user_code=ABCD-1234"]);
+
+  finishLogin();
+  let done = waiting;
+  for (let index = 0; index < 20 && done.status !== "completed"; index += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    done = await nativeAuth.loginStatus(started.loginId);
+  }
+  assert.equal(done.status, "completed");
+  assert.equal(done.userCode, "ABCD-1234");
+});
+
+test("xAI device-code login does not open a non-https verification URI", async () => {
+  const opened = [];
+  const rejections = [];
+  const onRejection = (error) => { rejections.push(error); };
+  process.on("unhandledRejection", onRejection);
+  try {
+    const nativeAuth = createNativeAuth({
+      openUrl: async (url) => { opened.push(url); },
+      loadSdk: async () => fakeSdk({
+        providers: [xai],
+        loginImpl: async (_providerId, _type, interaction) => {
+          interaction.notify({
+            type: "device_code",
+            userCode: "ABCD-1234",
+            verificationUri: "file:///etc/passwd",
+            expiresInSeconds: 900
+          });
+          throw new Error("Device flow timed out");
+        }
+      })
+    });
+
+    const started = await nativeAuth.login({ providerId: "xai", type: "oauth" });
+    let failed = started;
+    for (let index = 0; index < 20 && failed.status !== "error"; index += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      failed = await nativeAuth.loginStatus(started.loginId);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.equal(failed.status, "error");
+    assert.equal(failed.userCode, "ABCD-1234");
+    assert.equal(failed.authUrl, "");
+    assert.equal(failed.error, "Pi 原生登录失败，请重试");
+    assert.deepEqual(opened, []);
+    assert.deepEqual(rejections, []);
+  } finally {
+    process.off("unhandledRejection", onRejection);
+  }
 });

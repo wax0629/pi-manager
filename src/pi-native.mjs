@@ -29,6 +29,39 @@ function providerAuthMethods(provider) {
   return methods;
 }
 
+function safeHttpsUrl(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    return url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function positiveSeconds(value) {
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
+}
+
+// xAI subscription login never calls prompt(). It emits a device_code
+// notification, then polls until the browser approval finishes. The OAuth
+// device secret stays inside Pi; only the user code and https verification
+// URL are safe to show and open.
+function noteDeviceCode(session, event, openUrl) {
+  const userCode = String(event?.userCode || event?.user_code || "").trim();
+  const verificationUri = safeHttpsUrl(event?.verificationUri || event?.verification_uri || "");
+  const expiresInSeconds = positiveSeconds(event?.expiresInSeconds ?? event?.expires_in);
+  if (!userCode && !verificationUri) return false;
+  if (userCode) session.userCode = userCode;
+  if (verificationUri) session.authUrl = verificationUri;
+  if (expiresInSeconds) session.expiresInSeconds = expiresInSeconds;
+  if (!session.prompt) session.status = userCode ? "need_device_code" : "need_url";
+  if (verificationUri && typeof openUrl === "function") {
+    Promise.resolve().then(() => openUrl(verificationUri)).catch(() => {});
+  }
+  return true;
+}
+
 function summarizeNativeProvider(runtime, provider) {
   const status = runtime.getProviderAuthStatus?.(provider.id) || { configured: false };
   return {
@@ -179,7 +212,7 @@ export function createNativeAuth({
       for (const secret of session.privateValues) text = text.replaceAll(secret, "[redacted]");
       return text;
     };
-    return {
+    const view = {
       loginId: session.id,
       providerId: session.providerId,
       type: session.type,
@@ -188,7 +221,7 @@ export function createNativeAuth({
       instructions: redact(session.instructions),
       message: redact(session.message),
       links: session.links,
-      deviceCode: session.deviceCode,
+      userCode: session.userCode || "",
       prompt: session.prompt ? {
         ...session.prompt,
         message: redact(session.prompt.message),
@@ -196,6 +229,9 @@ export function createNativeAuth({
       } : null,
       error: session.error
     };
+    const expiresInSeconds = positiveSeconds(session.expiresInSeconds);
+    if (expiresInSeconds) view.expiresInSeconds = expiresInSeconds;
+    return view;
   }
 
   async function login({ providerId, type }) {
@@ -214,7 +250,8 @@ export function createNativeAuth({
       instructions: "",
       message: "",
       links: [],
-      deviceCode: null,
+      userCode: "",
+      expiresInSeconds: 0,
       prompt: null,
       error: "",
       resolvePrompt: null,
@@ -263,8 +300,7 @@ export function createNativeAuth({
             Promise.resolve().then(() => openUrl(event.url)).catch(() => {});
           }
         } else if (event.type === "device_code") {
-          session.deviceCode = { userCode: event.userCode, verificationUri: event.verificationUri };
-          if (!session.prompt) session.status = "need_url";
+          noteDeviceCode(session, event, openUrl);
         } else if (event.type === "info" || event.type === "progress") {
           session.message = event.message || "";
           session.links = (event.links || []).map(({ url, label }) => ({ url, label }));
@@ -288,7 +324,6 @@ export function createNativeAuth({
       session.links = [];
       session.authUrl = "";
       session.instructions = "";
-      session.deviceCode = null;
     });
 
     return publicSession(session);
@@ -320,7 +355,7 @@ export function createNativeAuth({
 
   async function loginStatus(loginId) {
     const session = getSession(loginId);
-    if (session.promise && session.status === "pending") {
+    if (session.promise && !["completed", "error", "cancelled", "need_prompt"].includes(session.status)) {
       try {
         await Promise.race([session.promise, new Promise((resolve) => setTimeout(resolve, 20))]);
       } catch {
